@@ -788,6 +788,21 @@ export default function QuotePage() {
                                         className="input-apple resize-none"
                                     />
                                 </div>
+
+                                {/* Step 1 Navigation */}
+                                <div className="flex justify-end pt-4 border-t border-gray-100">
+                                    <button
+                                        onClick={handleNext}
+                                        disabled={!canProceed()}
+                                        className={`flex items-center gap-2 px-8 py-3 rounded-xl font-medium transition-all ${canProceed()
+                                            ? 'bg-accent text-white hover:bg-accent-hover'
+                                            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                            }`}
+                                    >
+                                        Tiếp tục
+                                        <ChevronRight className="w-5 h-5" />
+                                    </button>
+                                </div>
                             </div>
                         </motion.div>
                     )}
@@ -924,6 +939,28 @@ export default function QuotePage() {
                                     <p className="text-xs text-text-secondary mt-2">
                                         💡 Sử dụng phím ↑↓ để chọn, Enter để xác nhận, Esc để đóng gợi ý
                                     </p>
+                                </div>
+
+                                {/* Step 2 Navigation */}
+                                <div className="flex justify-between pt-4 border-t border-gray-100">
+                                    <button
+                                        onClick={handleBack}
+                                        className="flex items-center gap-2 px-6 py-3 text-text-secondary hover:bg-gray-100 rounded-xl font-medium transition-all"
+                                    >
+                                        <ChevronLeft className="w-5 h-5" />
+                                        Quay lại
+                                    </button>
+                                    <button
+                                        onClick={handleNext}
+                                        disabled={!canProceed()}
+                                        className={`flex items-center gap-2 px-8 py-3 rounded-xl font-medium transition-all ${canProceed()
+                                            ? 'bg-accent text-white hover:bg-accent-hover'
+                                            : 'bg-gray-200 text-gray-400 cursor-not-allowed'
+                                            }`}
+                                    >
+                                        Tiếp tục
+                                        <ChevronRight className="w-5 h-5" />
+                                    </button>
                                 </div>
                             </div>
                         </motion.div>
@@ -1322,6 +1359,24 @@ export default function QuotePage() {
                                     </div>
                                 </div>
 
+                                {/* Step 3 Navigation */}
+                                <div className="flex justify-between pt-4">
+                                    <button
+                                        onClick={handleBack}
+                                        className="flex items-center gap-2 px-6 py-3 text-text-secondary hover:bg-gray-100 rounded-xl font-medium transition-all"
+                                    >
+                                        <ChevronLeft className="w-5 h-5" />
+                                        Quay lại
+                                    </button>
+                                    <button
+                                        onClick={handleNext}
+                                        className="flex items-center gap-2 px-8 py-3 bg-accent text-white rounded-xl font-medium hover:bg-accent-hover transition-all"
+                                    >
+                                        Tiếp tục
+                                        <ChevronRight className="w-5 h-5" />
+                                    </button>
+                                </div>
+
                             </div>
                         </motion.div>
                     )}
@@ -1645,68 +1700,80 @@ export default function QuotePage() {
                                 </div>
 
                                 {/* Action Buttons - Improved Visual Hierarchy */}
-                                <div className="flex flex-wrap items-center gap-3 justify-end print:hidden">
-                                    {/* Tertiary: In báo giá - Subtle gray */}
+                                <div className="flex flex-wrap items-center gap-3 justify-between print:hidden">
+                                    {/* Back Button */}
                                     <button
-                                        onClick={handlePrint}
-                                        className="flex items-center gap-2 px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl font-medium transition-all"
+                                        onClick={handleBack}
+                                        className="flex items-center gap-2 px-6 py-3 text-text-secondary hover:bg-gray-100 rounded-xl font-medium transition-all"
                                     >
-                                        <Printer className="w-4 h-4" />
-                                        In báo giá
+                                        <ChevronLeft className="w-5 h-5" />
+                                        Quay lại
                                     </button>
 
-                                    {/* Secondary: Xuất PDF - Outlined style */}
-                                    <PDFExportButton
-                                        quoteData={{
-                                            customerName: customerInfo.name,
-                                            phone: customerInfo.phone,
-                                            eventType: customerInfo.event_type,
-                                            eventDate: customerInfo.event_date,
-                                            numTables: quoteDetails.table_count,
-                                            numReserveTables: 0,
-                                            dishes: quoteItems.map((item) => ({
-                                                name: item.name,
-                                                quantity: item.quantity,
-                                                unit: item.unit,
-                                                unitPrice: item.custom_selling_price ?? item.selling_price,
-                                                totalPrice: item.total,
-                                                costPrice: item.custom_cost_price ?? item.cost_price,
-                                                profit: item.profit,
-                                            })),
-                                            totalRevenue: finalTotals.grandTotal,
-                                            totalCost: finalTotals.totalCost,
-                                            estimatedProfit: finalTotals.totalProfit,
-                                        }}
-                                    />
+                                    {/* Action Buttons Group */}
+                                    <div className="flex items-center gap-3">
+                                        {/* Tertiary: In báo giá - Subtle gray */}
+                                        <button
+                                            onClick={handlePrint}
+                                            className="flex items-center gap-2 px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl font-medium transition-all"
+                                        >
+                                            <Printer className="w-4 h-4" />
+                                            In báo giá
+                                        </button>
 
-                                    {/* Primary: Hoàn thành - Green filled, most prominent */}
-                                    <button
-                                        onClick={handleSubmitQuote}
-                                        disabled={isSubmitting || submitSuccess}
-                                        className={`flex items-center gap-2 px-6 py-3 rounded-xl font-semibold shadow-lg transition-all ${submitSuccess
-                                            ? 'bg-green-500 text-white shadow-green-200'
-                                            : isSubmitting
-                                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
-                                                : 'bg-green-500 text-white hover:bg-green-600 shadow-green-200 hover:shadow-green-300'
-                                            }`}
-                                    >
-                                        {isSubmitting ? (
-                                            <>
-                                                <Loader2 className="w-5 h-5 animate-spin" />
-                                                Đang lưu...
-                                            </>
-                                        ) : submitSuccess ? (
-                                            <>
-                                                <Check className="w-5 h-5" />
-                                                Đã lưu!
-                                            </>
-                                        ) : (
-                                            <>
-                                                <Check className="w-5 h-5" />
-                                                Hoàn thành
-                                            </>
-                                        )}
-                                    </button>
+                                        {/* Secondary: Xuất PDF - Outlined style */}
+                                        <PDFExportButton
+                                            quoteData={{
+                                                customerName: customerInfo.name,
+                                                phone: customerInfo.phone,
+                                                eventType: customerInfo.event_type,
+                                                eventDate: customerInfo.event_date,
+                                                numTables: quoteDetails.table_count,
+                                                numReserveTables: 0,
+                                                dishes: quoteItems.map((item) => ({
+                                                    name: item.name,
+                                                    quantity: item.quantity,
+                                                    unit: item.unit,
+                                                    unitPrice: item.custom_selling_price ?? item.selling_price,
+                                                    totalPrice: item.total,
+                                                    costPrice: item.custom_cost_price ?? item.cost_price,
+                                                    profit: item.profit,
+                                                })),
+                                                totalRevenue: finalTotals.grandTotal,
+                                                totalCost: finalTotals.totalCost,
+                                                estimatedProfit: finalTotals.totalProfit,
+                                            }}
+                                        />
+
+                                        {/* Primary: Hoàn thành - Green filled, most prominent */}
+                                        <button
+                                            onClick={handleSubmitQuote}
+                                            disabled={isSubmitting || submitSuccess}
+                                            className={`flex items-center gap-2 px-6 py-3 rounded-xl font-semibold shadow-lg transition-all ${submitSuccess
+                                                ? 'bg-green-500 text-white shadow-green-200'
+                                                : isSubmitting
+                                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
+                                                    : 'bg-green-500 text-white hover:bg-green-600 shadow-green-200 hover:shadow-green-300'
+                                                }`}
+                                        >
+                                            {isSubmitting ? (
+                                                <>
+                                                    <Loader2 className="w-5 h-5 animate-spin" />
+                                                    Đang lưu...
+                                                </>
+                                            ) : submitSuccess ? (
+                                                <>
+                                                    <Check className="w-5 h-5" />
+                                                    Đã lưu!
+                                                </>
+                                            ) : (
+                                                <>
+                                                    <Check className="w-5 h-5" />
+                                                    Hoàn thành
+                                                </>
+                                            )}
+                                        </button>
+                                    </div>
                                 </div>
                             </div>
                         </motion.div>
@@ -1714,39 +1781,7 @@ export default function QuotePage() {
                 </AnimatePresence>
             </div>
 
-            {/* Bottom Navigation */}
-            <div className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-100 py-4 print:hidden">
-                <div className="section-container flex justify-between items-center">
-                    <button
-                        onClick={handleBack}
-                        disabled={currentStep === 1}
-                        className={`flex items-center gap-2 px-6 py-3 rounded-full font-medium transition-all ${currentStep === 1
-                            ? 'text-gray-300 cursor-not-allowed'
-                            : 'text-text-secondary hover:bg-gray-100'
-                            }`}
-                    >
-                        <ChevronLeft className="w-5 h-5" />
-                        Quay lại
-                    </button>
 
-                    {currentStep < 4 ? (
-                        <button
-                            onClick={handleNext}
-                            disabled={!canProceed()}
-                            className={`flex items-center gap-2 px-8 py-3 rounded-full font-medium transition-all ${canProceed()
-                                ? 'bg-accent text-white hover:bg-accent-hover'
-                                : 'bg-gray-200 text-gray-400 cursor-not-allowed'
-                                }`}
-                        >
-                            Tiếp tục
-                            <ChevronRight className="w-5 h-5" />
-                        </button>
-                    ) : (
-                        /* Step 4: No buttons in bottom nav - actions are in the card above */
-                        <div />
-                    )}
-                </div>
-            </div>
 
             {/* Print Styles */}
             <style jsx global>{`
