@@ -186,10 +186,15 @@ export function PDFExportButton({ quoteData, className = '' }: PDFExportButtonPr
         link.download = `${quoteData.quoteNumber}.pdf`;
         document.body.appendChild(link);
         link.click();
-        document.body.removeChild(link);
-        URL.revokeObjectURL(url);
 
-        // Clean up
+        // Wait 100ms to allow browser to start download with correct filename
+        // before cleaning up the blob URL
+        setTimeout(() => {
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+        }, 100);
+
+        // Clean up PDF element
         document.body.removeChild(element);
     }, [quoteData]);
 
