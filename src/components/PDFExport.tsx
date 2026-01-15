@@ -176,18 +176,37 @@ export function PDFExportButton({ quoteData, className = '' }: PDFExportButtonPr
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         } as any;
 
-        // Generate PDF as blob and download with explicit filename using file-saver
-        const pdfBlob = await html2pdf().set(options).from(element).outputPdf('blob');
+        // Check if file-saver loads correctly
+        let saveAs;
+        try {
+            const fileSaver = await import('file-saver');
+            saveAs = fileSaver.saveAs;
+        } catch (e) {
+            console.error('Failed to load file-saver:', e);
+            // If file-saver fails to load, clean up the element and return
+            if (document.body.contains(element)) {
+                document.body.removeChild(element);
+            }
+            return;
+        }
 
-        console.log('Exporting PDF for Quote Number:', quoteData.quoteNumber);
+        try {
+            // Generate PDF as blob and download with explicit filename using file-saver
+            const pdfBlob = await html2pdf().set(options).from(element).outputPdf('blob');
 
-        // Use file-saver to save the file
-        const { saveAs } = await import('file-saver');
-        const filename = quoteData.quoteNumber ? `${quoteData.quoteNumber}.pdf` : `BaoGia_${new Date().toISOString().slice(0, 10)}.pdf`;
-        saveAs(pdfBlob, filename);
+            console.log('Exporting PDF for Quote Number:', quoteData.quoteNumber);
 
-        // Clean up PDF element
-        document.body.removeChild(element);
+            const filename = quoteData.quoteNumber ? `${quoteData.quoteNumber}.pdf` : `BaoGia_${new Date().toISOString().slice(0, 10)}.pdf`;
+            saveAs(pdfBlob, filename);
+        } catch (error) {
+            console.error('Error generating PDF:', error);
+            alert('Có lỗi xảy ra khi tạo PDF. Vui lòng thử lại.');
+        } finally {
+            // Clean up PDF element - ALWAYS RUNS
+            if (document.body.contains(element)) {
+                document.body.removeChild(element);
+            }
+        }
     }, [quoteData]);
 
     return (
