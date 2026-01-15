@@ -125,8 +125,12 @@ async function fetchFromSheets<T>(
             }
         });
 
-        // Note: Don't set custom headers for GET requests to avoid CORS preflight
-        const response = await fetch(url.toString());
+        // Use redirect: 'follow' to properly handle Google Apps Script redirects
+        // This is essential for CORS to work correctly with deployed Apps Scripts
+        const response = await fetch(url.toString(), {
+            method: 'GET',
+            redirect: 'follow',
+        });
 
         if (!response.ok) {
             throw new Error(`HTTP error! status: ${response.status}`);
