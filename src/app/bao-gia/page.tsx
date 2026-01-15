@@ -116,8 +116,47 @@ interface ExportOptions {
     totalDiscount: number;              // % giảm tổng
 }
 
+// Generate quote number with format BGAM+XXX+DDMMYYYY
+function generateQuoteNumber(): string {
+    const now = new Date();
+    const day = now.getDate().toString().padStart(2, '0');
+    const month = (now.getMonth() + 1).toString().padStart(2, '0');
+    const year = now.getFullYear().toString();
+    const dateKey = `${day}${month}${year}`;
+
+    // Get or initialize sequence for today
+    const todaySeqKey = `quote_seq_${dateKey}`;
+    const lastDateKey = localStorage.getItem('quote_last_date');
+
+    let seq: number;
+    if (typeof window !== 'undefined') {
+        if (lastDateKey !== dateKey) {
+            // New day, reset sequence
+            seq = 1;
+            localStorage.setItem('quote_last_date', dateKey);
+        } else {
+            const storedSeq = localStorage.getItem(todaySeqKey);
+            seq = storedSeq ? parseInt(storedSeq) + 1 : 1;
+        }
+        localStorage.setItem(todaySeqKey, seq.toString());
+    } else {
+        seq = 1;
+    }
+
+    const seqStr = seq.toString().padStart(3, '0');
+    return `BGAM${seqStr}-${dateKey}`;
+}
+
 export default function QuotePage() {
     const [currentStep, setCurrentStep] = useState(1);
+
+    // Generate quote number once when component mounts
+    const [quoteNumber] = useState<string>(() => {
+        if (typeof window !== 'undefined') {
+            return generateQuoteNumber();
+        }
+        return 'BGAM001-00000000';
+    });
 
     // Menu data from API
     const [menuDatabase, setMenuDatabase] = useState<MenuItem[]>([]);
@@ -1792,6 +1831,7 @@ export default function QuotePage() {
                                         {/* Secondary: Xuất PDF - Outlined style */}
                                         <PDFExportButton
                                             quoteData={{
+                                                quoteNumber: quoteNumber,
                                                 customerName: customerInfo.name,
                                                 phone: customerInfo.phone,
                                                 address: customerInfo.address,

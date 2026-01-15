@@ -4,6 +4,7 @@ import { useCallback } from 'react';
 import { FileDown } from 'lucide-react';
 
 interface QuoteData {
+    quoteNumber: string;
     customerName: string;
     phone: string;
     address: string;
@@ -51,6 +52,7 @@ export function PDFExportButton({ quoteData, className = '' }: PDFExportButtonPr
                 <!-- Header -->
                 <div style="text-align: center; margin-bottom: 30px;">
                     <h1 style="color: #b45309; margin: 0; font-size: 26px; letter-spacing: 4px; font-weight: 400;">BẢNG BÁO GIÁ</h1>
+                                        <p style="color: #78716c; margin: 5px 0 0 0; font-size: 12px; letter-spacing: 1px;">Mã: ${quoteData.quoteNumber}</p>
                     <div style="margin-top: 15px; display: flex; align-items: center; justify-content: center; gap: 10px;">
                         <div style="font-size: 28px; font-weight: 700; color: #92400e; font-family: 'Georgia', serif;">
                             GIÁO TUYẾT
@@ -169,7 +171,7 @@ export function PDFExportButton({ quoteData, className = '' }: PDFExportButtonPr
         // PDF options
         const options = {
             margin: 10,
-            filename: `BaoGia_${quoteData.customerName.replace(/\s+/g, '_')}_${new Date().toISOString().split('T')[0]}.pdf`,
+            filename: `${quoteData.quoteNumber}.pdf`,
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: { scale: 2, useCORS: true },
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
