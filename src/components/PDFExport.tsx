@@ -171,14 +171,23 @@ export function PDFExportButton({ quoteData, className = '' }: PDFExportButtonPr
         // PDF options
         const options = {
             margin: 10,
-            filename: `${quoteData.quoteNumber}.pdf`,
             image: { type: 'jpeg', quality: 0.98 },
             html2canvas: { scale: 2, useCORS: true },
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         } as any;
 
-        // Generate PDF
-        await html2pdf().set(options).from(element).save();
+        // Generate PDF as blob and download with explicit filename
+        const pdfBlob = await html2pdf().set(options).from(element).outputPdf('blob');
+
+        // Create download link with explicit filename
+        const url = URL.createObjectURL(pdfBlob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `${quoteData.quoteNumber}.pdf`;
+        document.body.appendChild(link);
+        link.click();
+        document.body.removeChild(link);
+        URL.revokeObjectURL(url);
 
         // Clean up
         document.body.removeChild(element);
