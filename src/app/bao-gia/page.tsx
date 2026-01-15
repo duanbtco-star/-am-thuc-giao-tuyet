@@ -183,6 +183,56 @@ export default function QuotePage() {
     const [customFramePrice, setCustomFramePrice] = useState<number | null>(null);
     const [customFrameCost, setCustomFrameCost] = useState<number | null>(null);
 
+    // Quote notes with preset options (saved to localStorage)
+    const [quoteNote, setQuoteNote] = useState<string>('');
+    const [savedNotes, setSavedNotes] = useState<string[]>([]);
+    const [newPresetNote, setNewPresetNote] = useState<string>('');
+    const [showAddNote, setShowAddNote] = useState(false);
+
+    // Default preset notes
+    const DEFAULT_PRESET_NOTES = [
+        'Báo giá trên đã bao gồm bàn ghế, nhân viên phục vụ.',
+        'Báo giá trên chưa bao gồm bàn ghế, nhân viên phục vụ.',
+    ];
+
+    // Load saved notes from localStorage on mount
+    useEffect(() => {
+        const stored = localStorage.getItem('quote_preset_notes');
+        if (stored) {
+            try {
+                const parsed = JSON.parse(stored);
+                setSavedNotes(parsed);
+            } catch {
+                setSavedNotes(DEFAULT_PRESET_NOTES);
+            }
+        } else {
+            // Initialize with default preset notes
+            setSavedNotes(DEFAULT_PRESET_NOTES);
+            localStorage.setItem('quote_preset_notes', JSON.stringify(DEFAULT_PRESET_NOTES));
+        }
+    }, []);
+
+    // Save new preset note
+    const addPresetNote = () => {
+        if (newPresetNote.trim() && !savedNotes.includes(newPresetNote.trim())) {
+            const updated = [...savedNotes, newPresetNote.trim()];
+            setSavedNotes(updated);
+            localStorage.setItem('quote_preset_notes', JSON.stringify(updated));
+            setNewPresetNote('');
+            setShowAddNote(false);
+        }
+    };
+
+    // Delete preset note
+    const deletePresetNote = (noteToDelete: string) => {
+        const updated = savedNotes.filter(n => n !== noteToDelete);
+        setSavedNotes(updated);
+        localStorage.setItem('quote_preset_notes', JSON.stringify(updated));
+        if (quoteNote === noteToDelete) {
+            setQuoteNote('');
+        }
+    };
+
     // Parse dishes from text input and match with database
     // Số lượng mặc định = số bàn (có thể thay đổi)
     const parseDishesFromInput = useCallback(() => {
@@ -1215,10 +1265,90 @@ export default function QuotePage() {
                                     </div>
                                 </div>
 
-                                {/* Notes */}
+                                {/* Quote Notes Section */}
+                                <div className="mt-6 p-4 bg-white rounded-xl border border-gray-200">
+                                    <div className="flex items-center justify-between mb-3">
+                                        <label className="flex items-center gap-2 font-semibold text-primary">
+                                            <FileText className="w-5 h-5" />
+                                            Ghi chú báo giá
+                                        </label>
+                                        <button
+                                            type="button"
+                                            onClick={() => setShowAddNote(!showAddNote)}
+                                            className="text-sm text-accent hover:underline print:hidden"
+                                        >
+                                            {showAddNote ? 'Đóng' : '+ Thêm ghi chú mới'}
+                                        </button>
+                                    </div>
+
+                                    {/* Preset notes selection */}
+                                    <div className="space-y-2 mb-3 print:hidden">
+                                        {savedNotes.map((note, idx) => (
+                                            <div key={idx} className="flex items-center gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setQuoteNote(quoteNote === note ? '' : note)}
+                                                    className={`flex-1 text-left px-3 py-2 rounded-lg text-sm transition-all ${quoteNote === note
+                                                        ? 'bg-accent/10 border-accent border-2 text-accent'
+                                                        : 'bg-gray-50 border border-gray-200 text-text-secondary hover:border-gray-300'
+                                                        }`}
+                                                >
+                                                    {note}
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => deletePresetNote(note)}
+                                                    className="text-red-400 hover:text-red-600 text-xs px-2"
+                                                    title="Xóa ghi chú này"
+                                                >
+                                                    ✕
+                                                </button>
+                                            </div>
+                                        ))}
+                                    </div>
+
+                                    {/* Add new preset note */}
+                                    {showAddNote && (
+                                        <div className="flex gap-2 mb-3 print:hidden">
+                                            <input
+                                                type="text"
+                                                value={newPresetNote}
+                                                onChange={(e) => setNewPresetNote(e.target.value)}
+                                                placeholder="Nhập ghi chú mới để lưu..."
+                                                className="flex-1 px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                                                onKeyDown={(e) => e.key === 'Enter' && addPresetNote()}
+                                            />
+                                            <button
+                                                type="button"
+                                                onClick={addPresetNote}
+                                                className="px-4 py-2 bg-accent text-white rounded-lg text-sm hover:bg-accent-hover"
+                                            >
+                                                Lưu
+                                            </button>
+                                        </div>
+                                    )}
+
+                                    {/* Custom note input */}
+                                    <textarea
+                                        value={quoteNote}
+                                        onChange={(e) => setQuoteNote(e.target.value)}
+                                        placeholder="Hoặc nhập ghi chú tùy chỉnh..."
+                                        rows={2}
+                                        className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm resize-none print:hidden"
+                                    />
+
+                                    {/* Display selected note for print */}
+                                    {quoteNote && (
+                                        <div className="hidden print:block text-sm text-text-secondary italic">
+                                            {quoteNote}
+                                        </div>
+                                    )}
+                                </div>
+
+                                {/* Customer Notes from Step 1 */}
                                 {customerInfo.notes && (
                                     <div className="mt-6 p-4 bg-gray-50 rounded-xl">
-                                        <p className="text-sm font-medium text-primary mb-1">Ghi chú:</p>
+                                        <p className="text-sm font-medium text-primary mb-1">Ghi chú khách hàng:</p>
                                         <p className="text-sm text-text-secondary">{customerInfo.notes}</p>
                                     </div>
                                 )}
