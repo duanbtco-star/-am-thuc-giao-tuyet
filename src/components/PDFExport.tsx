@@ -176,23 +176,15 @@ export function PDFExportButton({ quoteData, className = '' }: PDFExportButtonPr
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         } as any;
 
-        // Generate PDF as blob and download with explicit filename
+        // Generate PDF as blob and download with explicit filename using file-saver
         const pdfBlob = await html2pdf().set(options).from(element).outputPdf('blob');
 
-        // Create download link with explicit filename
-        const url = URL.createObjectURL(pdfBlob);
-        const link = document.createElement('a');
-        link.href = url;
-        link.download = `${quoteData.quoteNumber}.pdf`;
-        document.body.appendChild(link);
-        link.click();
+        console.log('Exporting PDF for Quote Number:', quoteData.quoteNumber);
 
-        // Wait 500ms to allow browser to start download with correct filename
-        // before cleaning up the blob URL (100ms was insufficient for some browsers)
-        setTimeout(() => {
-            document.body.removeChild(link);
-            URL.revokeObjectURL(url);
-        }, 500);
+        // Use file-saver to save the file
+        const { saveAs } = await import('file-saver');
+        const filename = quoteData.quoteNumber ? `${quoteData.quoteNumber}.pdf` : `BaoGia_${new Date().toISOString().slice(0, 10)}.pdf`;
+        saveAs(pdfBlob, filename);
 
         // Clean up PDF element
         document.body.removeChild(element);
