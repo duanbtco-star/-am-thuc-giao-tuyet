@@ -40,6 +40,8 @@ interface MenuItem {
 
 interface QuoteItem extends MenuItem {
     quantity: number;
+    custom_selling_price?: number;  // Override selling_price nếu người dùng chỉnh
+    custom_cost_price?: number;      // Override cost_price nếu người dùng chỉnh
     total: number;
     profit: number;
 }
@@ -137,6 +139,10 @@ export default function QuotePage() {
     // Suggestions for unmatched dishes
     const [dishSuggestions, setDishSuggestions] = useState<Map<string, MenuItem[]>>(new Map());
 
+    // Custom prices for table and staff (allow inline editing)
+    const [customTablePrice, setCustomTablePrice] = useState<number | null>(null);
+    const [customStaffPrice, setCustomStaffPrice] = useState<number | null>(null);
+
     // Parse dishes from text input and match with database
     // Số lượng mặc định = số bàn (có thể thay đổi)
     const parseDishesFromInput = useCallback(() => {
@@ -229,21 +235,32 @@ export default function QuotePage() {
         setDishSuggestions(suggestions);
     }, [quoteDetails.dishes_input, quoteDetails.table_count, menuDatabase]);
 
+    // Helper: Get effective prices (custom or default)
+    const getEffectivePrice = (item: QuoteItem) => item.custom_selling_price ?? item.selling_price;
+    const getEffectiveCost = (item: QuoteItem) => item.custom_cost_price ?? item.cost_price;
+
     // Calculate totals
     const totals = useMemo(() => {
-        const dishesTotal = quoteItems.reduce((sum, item) => sum + item.total, 0);
-        const dishesCost = quoteItems.reduce((sum, item) => sum + (item.cost_price * item.quantity), 0);
-        const dishesProfit = quoteItems.reduce((sum, item) => sum + item.profit, 0);
+        const dishesTotal = quoteItems.reduce((sum, item) => {
+            const effectivePrice = item.custom_selling_price ?? item.selling_price;
+            return sum + (effectivePrice * item.quantity);
+        }, 0);
+        const dishesCost = quoteItems.reduce((sum, item) => {
+            const effectiveCost = item.custom_cost_price ?? item.cost_price;
+            return sum + (effectiveCost * item.quantity);
+        }, 0);
+        const dishesProfit = dishesTotal - dishesCost;
 
-        // Table rental cost
-        const tablePrice = TABLE_TYPES[quoteDetails.table_type].price;
-        const tableTotal = tablePrice * quoteDetails.table_count;
+        // Table rental cost (use custom price if set)
+        const effectiveTablePrice = customTablePrice ?? TABLE_TYPES[quoteDetails.table_type].price;
+        const tableTotal = effectiveTablePrice * quoteDetails.table_count;
 
-        // Staff cost (estimated 300k/person)
-        const staffCost = quoteDetails.staff_count * 300000;
+        // Staff cost (use custom price if set, default 300k/person)
+        const effectiveStaffPrice = customStaffPrice ?? 300000;
+        const staffCost = quoteDetails.staff_count * effectiveStaffPrice;
 
         const grandTotal = dishesTotal + tableTotal + staffCost;
-        const totalCost = dishesCost + (tableTotal * 0.6) + (staffCost * 0.7); // Estimated cost ratios
+        const totalCost = dishesCost + (tableTotal * 0.6) + (staffCost * 0.7);
         const totalProfit = grandTotal - totalCost;
 
         return {
@@ -254,9 +271,11 @@ export default function QuotePage() {
             staffCost,
             grandTotal,
             totalCost,
-            totalProfit
+            totalProfit,
+            effectiveTablePrice,
+            effectiveStaffPrice
         };
-    }, [quoteItems, quoteDetails.table_count, quoteDetails.table_type, quoteDetails.staff_count]);
+    }, [quoteItems, quoteDetails.table_count, quoteDetails.table_type, quoteDetails.staff_count, customTablePrice, customStaffPrice]);
 
     // Update quantity in quote items
     const updateQuantity = (itemId: string, newQuantity: number) => {
@@ -264,11 +283,50 @@ export default function QuotePage() {
             items.map(item => {
                 if (item.id === itemId) {
                     const qty = Math.max(1, newQuantity);
+                    const effectivePrice = item.custom_selling_price ?? item.selling_price;
+                    const effectiveCost = item.custom_cost_price ?? item.cost_price;
                     return {
                         ...item,
                         quantity: qty,
-                        total: item.selling_price * qty,
-                        profit: (item.selling_price - item.cost_price) * qty,
+                        total: effectivePrice * qty,
+                        profit: (effectivePrice - effectiveCost) * qty,
+                    };
+                }
+                return item;
+            })
+        );
+    };
+
+    // Update selling price (đơn giá bán) for a quote item
+    const updateSellingPrice = (itemId: string, newPrice: number) => {
+        setQuoteItems(items =>
+            items.map(item => {
+                if (item.id === itemId) {
+                    const price = Math.max(0, newPrice);
+                    const effectiveCost = item.custom_cost_price ?? item.cost_price;
+                    return {
+                        ...item,
+                        custom_selling_price: price,
+                        total: price * item.quantity,
+                        profit: (price - effectiveCost) * item.quantity,
+                    };
+                }
+                return item;
+            })
+        );
+    };
+
+    // Update cost price (giá gốc) for a quote item
+    const updateCostPrice = (itemId: string, newCost: number) => {
+        setQuoteItems(items =>
+            items.map(item => {
+                if (item.id === itemId) {
+                    const cost = Math.max(0, newCost);
+                    const effectivePrice = item.custom_selling_price ?? item.selling_price;
+                    return {
+                        ...item,
+                        custom_cost_price: cost,
+                        profit: (effectivePrice - cost) * item.quantity,
                     };
                 }
                 return item;
@@ -794,46 +852,79 @@ export default function QuotePage() {
                                             </tr>
                                         </thead>
                                         <tbody className="divide-y divide-gray-100">
-                                            {quoteItems.map((item, index) => (
-                                                <tr key={item.id} className="hover:bg-gray-50">
-                                                    <td className="px-3 py-3 text-text-secondary">{index + 1}</td>
-                                                    <td className="px-3 py-3 font-medium text-primary">
-                                                        {item.name}
-                                                        <span className="text-text-secondary font-normal ml-1">({item.unit})</span>
-                                                    </td>
-                                                    <td className="px-3 py-3">
-                                                        <input
-                                                            type="number"
-                                                            value={item.quantity}
-                                                            onChange={(e) => updateQuantity(item.id, parseInt(e.target.value) || 1)}
-                                                            min="1"
-                                                            className="w-16 px-2 py-1 text-center border border-gray-200 rounded-lg print:border-none print:bg-transparent"
-                                                        />
-                                                    </td>
-                                                    <td className="px-3 py-3 text-right text-text-secondary">
-                                                        {formatCurrency(item.selling_price)}
-                                                    </td>
-                                                    <td className="px-3 py-3 text-right font-medium text-primary">
-                                                        {formatCurrency(item.total)}
-                                                    </td>
-                                                    <td className="px-3 py-3 text-right text-orange-600 bg-orange-50/50 print:hidden">
-                                                        {formatCurrency(item.cost_price * item.quantity)}
-                                                    </td>
-                                                    <td className="px-3 py-3 text-right font-medium text-green-600 bg-green-50/50 print:hidden">
-                                                        {formatCurrency(item.profit)}
-                                                    </td>
-                                                    <td className="px-3 py-3 text-center print:hidden">
-                                                        <button
-                                                            onClick={() => removeItem(item.id)}
-                                                            className="text-red-500 hover:text-red-700 text-xs"
-                                                        >
-                                                            Xóa
-                                                        </button>
-                                                    </td>
-                                                </tr>
-                                            ))}
+                                            {quoteItems.map((item, index) => {
+                                                const effectivePrice = item.custom_selling_price ?? item.selling_price;
+                                                const effectiveCost = item.custom_cost_price ?? item.cost_price;
+                                                const isCustomPrice = item.custom_selling_price !== undefined;
+                                                const isCustomCost = item.custom_cost_price !== undefined;
 
-                                            {/* Additional Rows - Bàn ghế (cho phép thay đổi số lượng) */}
+                                                return (
+                                                    <tr key={item.id} className="hover:bg-gray-50">
+                                                        <td className="px-3 py-3 text-text-secondary">{index + 1}</td>
+                                                        <td className="px-3 py-3 font-medium text-primary">
+                                                            {item.name}
+                                                            <span className="text-text-secondary font-normal ml-1">({item.unit})</span>
+                                                        </td>
+                                                        <td className="px-3 py-3">
+                                                            <input
+                                                                type="number"
+                                                                value={item.quantity}
+                                                                onChange={(e) => updateQuantity(item.id, parseInt(e.target.value) || 1)}
+                                                                min="1"
+                                                                className="w-16 px-2 py-1 text-center border border-gray-200 rounded-lg print:border-none print:bg-transparent"
+                                                            />
+                                                        </td>
+                                                        <td className="px-3 py-3 text-right">
+                                                            <div className="flex items-center justify-end gap-1">
+                                                                <input
+                                                                    type="number"
+                                                                    value={effectivePrice}
+                                                                    onChange={(e) => updateSellingPrice(item.id, parseInt(e.target.value) || 0)}
+                                                                    min="0"
+                                                                    step="10000"
+                                                                    className={`w-24 px-2 py-1 text-right border rounded-lg print:border-none print:bg-transparent ${isCustomPrice ? 'border-blue-400 bg-blue-50' : 'border-gray-200'
+                                                                        }`}
+                                                                />
+                                                                {isCustomPrice && (
+                                                                    <span className="text-blue-500 text-xs" title="Đã chỉnh sửa">✎</span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-3 py-3 text-right font-medium text-primary">
+                                                            {formatCurrency(effectivePrice * item.quantity)}
+                                                        </td>
+                                                        <td className="px-3 py-3 text-right bg-orange-50/50 print:hidden">
+                                                            <div className="flex items-center justify-end gap-1">
+                                                                <input
+                                                                    type="number"
+                                                                    value={effectiveCost}
+                                                                    onChange={(e) => updateCostPrice(item.id, parseInt(e.target.value) || 0)}
+                                                                    min="0"
+                                                                    step="10000"
+                                                                    className={`w-24 px-2 py-1 text-right border rounded-lg ${isCustomCost ? 'border-orange-400 bg-orange-100' : 'border-gray-200 bg-white'
+                                                                        }`}
+                                                                />
+                                                                {isCustomCost && (
+                                                                    <span className="text-orange-500 text-xs" title="Đã chỉnh sửa">✎</span>
+                                                                )}
+                                                            </div>
+                                                        </td>
+                                                        <td className="px-3 py-3 text-right font-medium text-green-600 bg-green-50/50 print:hidden">
+                                                            {formatCurrency((effectivePrice - effectiveCost) * item.quantity)}
+                                                        </td>
+                                                        <td className="px-3 py-3 text-center print:hidden">
+                                                            <button
+                                                                onClick={() => removeItem(item.id)}
+                                                                className="text-red-500 hover:text-red-700 text-xs"
+                                                            >
+                                                                Xóa
+                                                            </button>
+                                                        </td>
+                                                    </tr>
+                                                );
+                                            })}
+
+                                            {/* Additional Rows - Bàn ghế (cho phép thay đổi số lượng VÀ đơn giá) */}
                                             {quoteDetails.table_type !== 'none' && (
                                                 <tr className="bg-gray-50/50">
                                                     <td className="px-3 py-3 text-text-secondary">{quoteItems.length + 1}</td>
@@ -849,8 +940,21 @@ export default function QuotePage() {
                                                             className="w-16 px-2 py-1 text-center border border-gray-200 rounded-lg print:border-none print:bg-transparent"
                                                         />
                                                     </td>
-                                                    <td className="px-3 py-3 text-right text-text-secondary">
-                                                        {formatCurrency(TABLE_TYPES[quoteDetails.table_type].price)}
+                                                    <td className="px-3 py-3 text-right">
+                                                        <div className="flex items-center justify-end gap-1">
+                                                            <input
+                                                                type="number"
+                                                                value={totals.effectiveTablePrice}
+                                                                onChange={(e) => setCustomTablePrice(Math.max(0, parseInt(e.target.value) || 0))}
+                                                                min="0"
+                                                                step="10000"
+                                                                className={`w-24 px-2 py-1 text-right border rounded-lg print:border-none print:bg-transparent ${customTablePrice !== null ? 'border-blue-400 bg-blue-50' : 'border-gray-200'
+                                                                    }`}
+                                                            />
+                                                            {customTablePrice !== null && (
+                                                                <span className="text-blue-500 text-xs" title="Đã chỉnh sửa">✎</span>
+                                                            )}
+                                                        </div>
                                                     </td>
                                                     <td className="px-3 py-3 text-right font-medium text-primary">
                                                         {formatCurrency(totals.tableTotal)}
@@ -865,7 +969,7 @@ export default function QuotePage() {
                                                 </tr>
                                             )}
 
-                                            {/* Nhân viên phục vụ (cho phép thay đổi số lượng) */}
+                                            {/* Nhân viên phục vụ (cho phép thay đổi số lượng VÀ đơn giá) */}
                                             {quoteDetails.staff_count > 0 && (
                                                 <tr className="bg-gray-50/50">
                                                     <td className="px-3 py-3 text-text-secondary">{quoteItems.length + (quoteDetails.table_type !== 'none' ? 2 : 1)}</td>
@@ -879,7 +983,22 @@ export default function QuotePage() {
                                                             className="w-16 px-2 py-1 text-center border border-gray-200 rounded-lg print:border-none print:bg-transparent"
                                                         />
                                                     </td>
-                                                    <td className="px-3 py-3 text-right text-text-secondary">{formatCurrency(300000)}</td>
+                                                    <td className="px-3 py-3 text-right">
+                                                        <div className="flex items-center justify-end gap-1">
+                                                            <input
+                                                                type="number"
+                                                                value={totals.effectiveStaffPrice}
+                                                                onChange={(e) => setCustomStaffPrice(Math.max(0, parseInt(e.target.value) || 0))}
+                                                                min="0"
+                                                                step="10000"
+                                                                className={`w-24 px-2 py-1 text-right border rounded-lg print:border-none print:bg-transparent ${customStaffPrice !== null ? 'border-blue-400 bg-blue-50' : 'border-gray-200'
+                                                                    }`}
+                                                            />
+                                                            {customStaffPrice !== null && (
+                                                                <span className="text-blue-500 text-xs" title="Đã chỉnh sửa">✎</span>
+                                                            )}
+                                                        </div>
+                                                    </td>
                                                     <td className="px-3 py-3 text-right font-medium text-primary">
                                                         {formatCurrency(totals.staffCost)}
                                                     </td>
