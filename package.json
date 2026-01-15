@@ -1,0 +1,34 @@
+{
+  "name": "am-thuc-giao-tuyet",
+  "version": "1.0.0",
+  "description": "Ứng dụng web dịch vụ nấu ăn tiệc tại nhà - Thôi nôi, Đám cưới, Đám hỏi, Đám dỗ",
+  "private": true,
+  "scripts": {
+    "dev": "next dev",
+    "build": "next build",
+    "start": "next start",
+    "lint": "next lint"
+  },
+  "dependencies": {
+    "@types/node": "^20.0.0",
+    "@types/react": "^18.0.0",
+    "@types/react-dom": "^18.0.0",
+    "date-fns": "^3.0.0",
+    "file-saver": "^2.0.5",
+    "framer-motion": "^11.0.0",
+    "html2pdf.js": "^0.14.0",
+    "lucide-react": "^0.400.0",
+    "next": "^14.0.0",
+    "react": "^18.0.0",
+    "react-dom": "^18.0.0",
+    "react-icons": "^5.0.0",
+    "typescript": "^5.0.0",
+    "xlsx": "^0.18.5"
+  },
+  "devDependencies": {
+    "@types/file-saver": "^2.0.7",
+    "autoprefixer": "^10.4.23",
+    "postcss": "^8.5.6",
+    "tailwindcss": "^3.4.19"
+  }
+}
