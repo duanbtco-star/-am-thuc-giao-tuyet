@@ -22,7 +22,10 @@ import {
     Printer,
     Eye,
     Sparkles,
-    Loader2
+    Loader2,
+    FileOutput,
+    Settings2,
+    Percent
 } from 'lucide-react';
 import { formatCurrency, findSimilarItems } from '@/lib/utils';
 import { menuApi, quoteApi, MenuItem as ApiMenuItem } from '@/lib/google-sheets';
@@ -91,7 +94,17 @@ const steps = [
     { id: 1, title: 'Thông tin khách hàng', icon: User },
     { id: 2, title: 'Chi tiết đơn hàng', icon: FileText },
     { id: 3, title: 'Báo giá', icon: Table },
+    { id: 4, title: 'Xuất báo giá', icon: FileOutput },
 ];
+
+// Export Options interface
+interface ExportOptions {
+    customerHandlesStaff: boolean;      // Khách tự lo nhân viên
+    showIndividualPrices: boolean;      // Hiển thị giá từng món
+    tableDiscount: number;              // % giảm bàn ghế
+    frameDiscount: number;              // % giảm khung rạp  
+    totalDiscount: number;              // % giảm tổng
+}
 
 export default function QuotePage() {
     const [currentStep, setCurrentStep] = useState(1);
@@ -182,6 +195,15 @@ export default function QuotePage() {
     const [customStaffPrice, setCustomStaffPrice] = useState<number | null>(null);
     const [customFramePrice, setCustomFramePrice] = useState<number | null>(null);
     const [customFrameCost, setCustomFrameCost] = useState<number | null>(null);
+
+    // Step 4: Export Options
+    const [exportOptions, setExportOptions] = useState<ExportOptions>({
+        customerHandlesStaff: false,
+        showIndividualPrices: true,
+        tableDiscount: 0,
+        frameDiscount: 0,
+        totalDiscount: 0,
+    });
 
     // Quote notes with preset options (saved to localStorage)
     const [quoteNote, setQuoteNote] = useState<string>('');
@@ -388,6 +410,41 @@ export default function QuotePage() {
             effectiveFrameCost
         };
     }, [quoteItems, quoteDetails.table_count, quoteDetails.table_type, quoteDetails.staff_count, quoteDetails.frame_count, customTablePrice, customStaffPrice, customFramePrice, customFrameCost, servicePrices]);
+
+    // Final totals with export options (discounts and display mode)
+    const finalTotals = useMemo(() => {
+        // Apply discounts
+        const finalTableTotal = totals.tableTotal * (1 - exportOptions.tableDiscount / 100);
+        const finalFrameTotal = totals.frameTotal * (1 - exportOptions.frameDiscount / 100);
+        const staffComponent = exportOptions.customerHandlesStaff ? 0 : totals.staffTotal;
+        const staffCostComponent = exportOptions.customerHandlesStaff ? 0 : totals.staffCost;
+
+        // Calculate subtotal before total discount
+        const subtotal = totals.dishesTotal + finalTableTotal + finalFrameTotal + staffComponent;
+        const subtotalCost = totals.dishesCost + totals.tableCost + totals.frameCost + staffCostComponent;
+
+        // Apply total discount
+        const grandTotal = subtotal * (1 - exportOptions.totalDiscount / 100);
+        const totalCost = subtotalCost;  // Cost doesn't get discounted
+        const totalProfit = grandTotal - totalCost;
+
+        // Price per table (for display mode)
+        const pricePerTable = quoteDetails.table_count > 0 ? grandTotal / quoteDetails.table_count : 0;
+
+        return {
+            finalTableTotal,
+            finalFrameTotal,
+            staffComponent,
+            subtotal,
+            grandTotal,
+            totalCost,
+            totalProfit,
+            pricePerTable,
+            tableDiscountAmount: totals.tableTotal - finalTableTotal,
+            frameDiscountAmount: totals.frameTotal - finalFrameTotal,
+            totalDiscountAmount: subtotal - grandTotal,
+        };
+    }, [totals, exportOptions, quoteDetails.table_count]);
 
     // Update quantity in quote items
     const updateQuantity = (itemId: string, newQuantity: number) => {
@@ -1265,8 +1322,232 @@ export default function QuotePage() {
                                     </div>
                                 </div>
 
+                            </div>
+                        </motion.div>
+                    )}
+
+                    {/* Step 4: Xuất báo giá */}
+                    {currentStep === 4 && (
+                        <motion.div
+                            key="step4"
+                            initial={{ opacity: 0, x: 20 }}
+                            animate={{ opacity: 1, x: 0 }}
+                            exit={{ opacity: 0, x: -20 }}
+                            className="card-apple"
+                        >
+                            <div className="p-6">
+                                <h2 className="text-2xl font-bold text-primary mb-6 flex items-center gap-2">
+                                    <FileOutput className="w-6 h-6 text-accent" />
+                                    Xuất báo giá
+                                </h2>
+
+                                {/* Export Options Panel */}
+                                <div className="mb-6 p-4 bg-gray-50 rounded-xl border border-gray-200">
+                                    <h3 className="flex items-center gap-2 font-semibold text-primary mb-4">
+                                        <Settings2 className="w-5 h-5" />
+                                        Tùy chọn xuất báo giá
+                                    </h3>
+
+                                    {/* Checkboxes */}
+                                    <div className="space-y-3 mb-4">
+                                        <label className="flex items-center gap-3 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={exportOptions.customerHandlesStaff}
+                                                onChange={(e) => setExportOptions({ ...exportOptions, customerHandlesStaff: e.target.checked })}
+                                                className="w-5 h-5 rounded border-gray-300 text-accent focus:ring-accent"
+                                            />
+                                            <span className="text-sm">Khách tự lo nhân viên phục vụ</span>
+                                            {exportOptions.customerHandlesStaff && (
+                                                <span className="text-xs text-orange-500">(không tính tiền nhân viên)</span>
+                                            )}
+                                        </label>
+                                        <label className="flex items-center gap-3 cursor-pointer">
+                                            <input
+                                                type="checkbox"
+                                                checked={exportOptions.showIndividualPrices}
+                                                onChange={(e) => setExportOptions({ ...exportOptions, showIndividualPrices: e.target.checked })}
+                                                className="w-5 h-5 rounded border-gray-300 text-accent focus:ring-accent"
+                                            />
+                                            <span className="text-sm">Hiển thị giá từng món ăn</span>
+                                            {!exportOptions.showIndividualPrices && (
+                                                <span className="text-xs text-blue-500">(hiển thị giá/bàn = {formatCurrency(finalTotals.pricePerTable)})</span>
+                                            )}
+                                        </label>
+                                    </div>
+
+                                    {/* Discount Inputs */}
+                                    <div className="grid sm:grid-cols-3 gap-4">
+                                        <div>
+                                            <label className="block text-sm text-text-secondary mb-1">
+                                                <Percent className="w-4 h-4 inline mr-1" />
+                                                Giảm giá bàn ghế
+                                            </label>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="number"
+                                                    value={exportOptions.tableDiscount}
+                                                    onChange={(e) => setExportOptions({ ...exportOptions, tableDiscount: Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)) })}
+                                                    min="0"
+                                                    max="100"
+                                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                                                />
+                                                <span className="text-sm text-text-secondary">%</span>
+                                            </div>
+                                            {exportOptions.tableDiscount > 0 && (
+                                                <p className="text-xs text-green-600 mt-1">-{formatCurrency(finalTotals.tableDiscountAmount)}</p>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm text-text-secondary mb-1">
+                                                <Percent className="w-4 h-4 inline mr-1" />
+                                                Giảm giá khung rạp
+                                            </label>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="number"
+                                                    value={exportOptions.frameDiscount}
+                                                    onChange={(e) => setExportOptions({ ...exportOptions, frameDiscount: Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)) })}
+                                                    min="0"
+                                                    max="100"
+                                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                                                />
+                                                <span className="text-sm text-text-secondary">%</span>
+                                            </div>
+                                            {exportOptions.frameDiscount > 0 && (
+                                                <p className="text-xs text-green-600 mt-1">-{formatCurrency(finalTotals.frameDiscountAmount)}</p>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm text-text-secondary mb-1">
+                                                <Percent className="w-4 h-4 inline mr-1" />
+                                                Giảm giá tổng đơn
+                                            </label>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="number"
+                                                    value={exportOptions.totalDiscount}
+                                                    onChange={(e) => setExportOptions({ ...exportOptions, totalDiscount: Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)) })}
+                                                    min="0"
+                                                    max="100"
+                                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                                                />
+                                                <span className="text-sm text-text-secondary">%</span>
+                                            </div>
+                                            {exportOptions.totalDiscount > 0 && (
+                                                <p className="text-xs text-green-600 mt-1">-{formatCurrency(finalTotals.totalDiscountAmount)}</p>
+                                            )}
+                                        </div>
+                                    </div>
+                                </div>
+
+                                {/* Quote Preview */}
+                                <div className="mb-6 p-4 bg-white rounded-xl border border-gray-200" id="quote-export-preview">
+                                    <div className="flex justify-between items-start mb-4">
+                                        <div>
+                                            <h3 className="text-lg font-bold text-primary">ẨM THỰC GIÁO TUYẾT</h3>
+                                            <p className="text-sm text-text-secondary">Khách hàng: {customerInfo.name}</p>
+                                            <p className="text-sm text-text-secondary">SĐT: {customerInfo.phone}</p>
+                                        </div>
+                                        <div className="text-right text-sm text-text-secondary">
+                                            <p>Ngày: {new Date().toLocaleDateString('vi-VN')}</p>
+                                            <p className="font-medium">{quoteDetails.table_count} bàn</p>
+                                        </div>
+                                    </div>
+
+                                    {exportOptions.showIndividualPrices ? (
+                                        /* Show individual prices table */
+                                        <table className="w-full text-sm mb-4">
+                                            <thead>
+                                                <tr className="border-b border-gray-200">
+                                                    <th className="text-left py-2 px-2">STT</th>
+                                                    <th className="text-left py-2 px-2">Tên món</th>
+                                                    <th className="text-right py-2 px-2">SL</th>
+                                                    <th className="text-right py-2 px-2">Đơn giá</th>
+                                                    <th className="text-right py-2 px-2">Thành tiền</th>
+                                                </tr>
+                                            </thead>
+                                            <tbody>
+                                                {quoteItems.map((item, idx) => (
+                                                    <tr key={item.id} className="border-b border-gray-100">
+                                                        <td className="py-2 px-2">{idx + 1}</td>
+                                                        <td className="py-2 px-2">{item.name}</td>
+                                                        <td className="py-2 px-2 text-right">{item.quantity}</td>
+                                                        <td className="py-2 px-2 text-right">{formatCurrency(item.custom_selling_price ?? item.selling_price)}</td>
+                                                        <td className="py-2 px-2 text-right">{formatCurrency(item.total)}</td>
+                                                    </tr>
+                                                ))}
+                                                {/* Table rental */}
+                                                {quoteDetails.table_type !== 'none' && (
+                                                    <tr className="border-b border-gray-100 bg-gray-50">
+                                                        <td className="py-2 px-2">{quoteItems.length + 1}</td>
+                                                        <td className="py-2 px-2">{TABLE_TYPE_IDS[quoteDetails.table_type].name}</td>
+                                                        <td className="py-2 px-2 text-right">{quoteDetails.table_count}</td>
+                                                        <td className="py-2 px-2 text-right">{formatCurrency(totals.effectiveTablePrice)}</td>
+                                                        <td className="py-2 px-2 text-right">
+                                                            {formatCurrency(finalTotals.finalTableTotal)}
+                                                            {exportOptions.tableDiscount > 0 && <span className="text-green-600 text-xs ml-1">(-{exportOptions.tableDiscount}%)</span>}
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                                {/* Frame */}
+                                                {quoteDetails.frame_count > 0 && (
+                                                    <tr className="border-b border-gray-100 bg-amber-50">
+                                                        <td className="py-2 px-2">{quoteItems.length + (quoteDetails.table_type !== 'none' ? 2 : 1)}</td>
+                                                        <td className="py-2 px-2">🎪 Khung rạp</td>
+                                                        <td className="py-2 px-2 text-right">{quoteDetails.frame_count}</td>
+                                                        <td className="py-2 px-2 text-right">{formatCurrency(totals.effectiveFramePrice)}</td>
+                                                        <td className="py-2 px-2 text-right">
+                                                            {formatCurrency(finalTotals.finalFrameTotal)}
+                                                            {exportOptions.frameDiscount > 0 && <span className="text-green-600 text-xs ml-1">(-{exportOptions.frameDiscount}%)</span>}
+                                                        </td>
+                                                    </tr>
+                                                )}
+                                                {/* Staff */}
+                                                {!exportOptions.customerHandlesStaff && quoteDetails.staff_count > 0 && (
+                                                    <tr className="border-b border-gray-100 bg-gray-50">
+                                                        <td className="py-2 px-2">{quoteItems.length + (quoteDetails.table_type !== 'none' ? 1 : 0) + (quoteDetails.frame_count > 0 ? 1 : 0) + 1}</td>
+                                                        <td className="py-2 px-2">Nhân viên phục vụ</td>
+                                                        <td className="py-2 px-2 text-right">{quoteDetails.staff_count}</td>
+                                                        <td className="py-2 px-2 text-right">{formatCurrency(totals.effectiveStaffPrice)}</td>
+                                                        <td className="py-2 px-2 text-right">{formatCurrency(finalTotals.staffComponent)}</td>
+                                                    </tr>
+                                                )}
+                                            </tbody>
+                                            <tfoot>
+                                                <tr className="border-t-2 border-gray-300 font-bold">
+                                                    <td colSpan={4} className="py-3 px-2 text-right">TỔNG CỘNG:</td>
+                                                    <td className="py-3 px-2 text-right text-accent text-lg">
+                                                        {formatCurrency(finalTotals.grandTotal)}
+                                                        {exportOptions.totalDiscount > 0 && <span className="text-green-600 text-xs ml-1">(-{exportOptions.totalDiscount}%)</span>}
+                                                    </td>
+                                                </tr>
+                                            </tfoot>
+                                        </table>
+                                    ) : (
+                                        /* Show price per table */
+                                        <div className="text-center py-8 bg-gradient-to-r from-accent/5 to-accent/10 rounded-xl">
+                                            <p className="text-text-secondary mb-2">Giá trọn gói / bàn tiệc</p>
+                                            <p className="text-4xl font-bold text-accent">{formatCurrency(finalTotals.pricePerTable)}</p>
+                                            <p className="text-sm text-text-secondary mt-2">
+                                                × {quoteDetails.table_count} bàn = <span className="font-semibold">{formatCurrency(finalTotals.grandTotal)}</span>
+                                            </p>
+                                            {(exportOptions.tableDiscount > 0 || exportOptions.frameDiscount > 0 || exportOptions.totalDiscount > 0) && (
+                                                <p className="text-xs text-green-600 mt-1">(Đã áp dụng giảm giá)</p>
+                                            )}
+                                        </div>
+                                    )}
+
+                                    {/* Quote note display */}
+                                    {quoteNote && (
+                                        <div className="mt-4 p-3 bg-gray-50 rounded-lg text-sm italic text-text-secondary">
+                                            {quoteNote}
+                                        </div>
+                                    )}
+                                </div>
+
                                 {/* Quote Notes Section */}
-                                <div className="mt-6 p-4 bg-white rounded-xl border border-gray-200">
+                                <div className="mb-6 p-4 bg-white rounded-xl border border-gray-200">
                                     <div className="flex items-center justify-between mb-3">
                                         <label className="flex items-center gap-2 font-semibold text-primary">
                                             <FileText className="w-5 h-5" />
@@ -1336,25 +1617,35 @@ export default function QuotePage() {
                                         rows={2}
                                         className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm resize-none print:hidden"
                                     />
-
-                                    {/* Display selected note for print */}
-                                    {quoteNote && (
-                                        <div className="hidden print:block text-sm text-text-secondary italic">
-                                            {quoteNote}
-                                        </div>
-                                    )}
                                 </div>
 
-                                {/* Customer Notes from Step 1 */}
-                                {customerInfo.notes && (
-                                    <div className="mt-6 p-4 bg-gray-50 rounded-xl">
-                                        <p className="text-sm font-medium text-primary mb-1">Ghi chú khách hàng:</p>
-                                        <p className="text-sm text-text-secondary">{customerInfo.notes}</p>
+                                {/* Profit Summary - Internal Only */}
+                                <div className="mb-6 p-4 bg-gradient-to-r from-green-50 to-blue-50 rounded-xl print:hidden">
+                                    <div className="flex items-center gap-2 mb-3">
+                                        <Sparkles className="w-5 h-5 text-green-600" />
+                                        <h4 className="font-semibold text-primary">Tổng kết lợi nhuận (Nội bộ)</h4>
                                     </div>
-                                )}
+                                    <div className="grid sm:grid-cols-3 gap-4 text-center">
+                                        <div className="bg-white rounded-lg p-3">
+                                            <p className="text-sm text-text-secondary">Tổng doanh thu</p>
+                                            <p className="text-xl font-bold text-primary">{formatCurrency(finalTotals.grandTotal)}</p>
+                                        </div>
+                                        <div className="bg-white rounded-lg p-3">
+                                            <p className="text-sm text-text-secondary">Tổng giá gốc</p>
+                                            <p className="text-xl font-bold text-orange-600">{formatCurrency(finalTotals.totalCost)}</p>
+                                        </div>
+                                        <div className="bg-white rounded-lg p-3">
+                                            <p className="text-sm text-text-secondary">Lợi nhuận ước tính</p>
+                                            <p className="text-xl font-bold text-green-600">{formatCurrency(finalTotals.totalProfit)}</p>
+                                            <p className="text-xs text-green-600">
+                                                ({finalTotals.grandTotal > 0 ? ((finalTotals.totalProfit / finalTotals.grandTotal) * 100).toFixed(1) : 0}%)
+                                            </p>
+                                        </div>
+                                    </div>
+                                </div>
 
                                 {/* Action Buttons */}
-                                <div className="mt-6 flex flex-wrap gap-3 justify-end print:hidden">
+                                <div className="flex flex-wrap gap-3 justify-end print:hidden">
                                     <button
                                         onClick={handlePrint}
                                         className="flex items-center gap-2 px-6 py-3 bg-gray-100 text-primary rounded-xl font-medium hover:bg-gray-200 transition-all"
@@ -1362,6 +1653,28 @@ export default function QuotePage() {
                                         <Printer className="w-5 h-5" />
                                         In báo giá
                                     </button>
+                                    <PDFExportButton
+                                        quoteData={{
+                                            customerName: customerInfo.name,
+                                            phone: customerInfo.phone,
+                                            eventType: customerInfo.event_type,
+                                            eventDate: customerInfo.event_date,
+                                            numTables: quoteDetails.table_count,
+                                            numReserveTables: 0,
+                                            dishes: quoteItems.map((item) => ({
+                                                name: item.name,
+                                                quantity: item.quantity,
+                                                unit: item.unit,
+                                                unitPrice: item.custom_selling_price ?? item.selling_price,
+                                                totalPrice: item.total,
+                                                costPrice: item.custom_cost_price ?? item.cost_price,
+                                                profit: item.profit,
+                                            })),
+                                            totalRevenue: finalTotals.grandTotal,
+                                            totalCost: finalTotals.totalCost,
+                                            estimatedProfit: finalTotals.totalProfit,
+                                        }}
+                                    />
                                     <button
                                         onClick={handleSubmitQuote}
                                         disabled={isSubmitting || submitSuccess}
@@ -1385,7 +1698,7 @@ export default function QuotePage() {
                                         ) : (
                                             <>
                                                 <Download className="w-5 h-5" />
-                                                Lưu báo giá
+                                                Hoàn thành
                                             </>
                                         )}
                                     </button>
@@ -1411,7 +1724,7 @@ export default function QuotePage() {
                         Quay lại
                     </button>
 
-                    {currentStep < 3 ? (
+                    {currentStep < 4 ? (
                         <button
                             onClick={handleNext}
                             disabled={!canProceed()}
