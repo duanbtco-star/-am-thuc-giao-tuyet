@@ -176,28 +176,28 @@ export function PDFExportButton({ quoteData, className = '' }: PDFExportButtonPr
             jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' }
         } as any;
 
-        // Check if file-saver loads correctly
-        let saveAs;
         try {
-            const fileSaver = await import('file-saver');
-            saveAs = fileSaver.saveAs;
-        } catch (e) {
-            console.error('Failed to load file-saver:', e);
-            // If file-saver fails to load, clean up the element and return
-            if (document.body.contains(element)) {
-                document.body.removeChild(element);
-            }
-            return;
-        }
-
-        try {
-            // Generate PDF as blob and download with explicit filename using file-saver
+            // Generate PDF as blob
             const pdfBlob = await html2pdf().set(options).from(element).outputPdf('blob');
 
             console.log('Exporting PDF for Quote Number:', quoteData.quoteNumber);
 
             const filename = quoteData.quoteNumber ? `${quoteData.quoteNumber}.pdf` : `BaoGia_${new Date().toISOString().slice(0, 10)}.pdf`;
-            saveAs(pdfBlob, filename);
+
+            // Use native Blob URL download approach (works reliably in production)
+            const blobUrl = URL.createObjectURL(pdfBlob);
+            const link = document.createElement('a');
+            link.href = blobUrl;
+            link.download = filename;
+            link.style.display = 'none';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            // Revoke URL after delay to allow download to complete
+            setTimeout(() => {
+                URL.revokeObjectURL(blobUrl);
+            }, 1000);
         } catch (error) {
             console.error('Error generating PDF:', error);
             alert('Có lỗi xảy ra khi tạo PDF. Vui lòng thử lại.');
