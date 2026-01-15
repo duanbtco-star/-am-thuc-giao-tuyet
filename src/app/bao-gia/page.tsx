@@ -74,6 +74,16 @@ interface ServicePrices {
     staff: { selling: number; cost: number };
 }
 
+// Export options for Step 4
+interface ExportOptions {
+    customerHandlesStaff: boolean;
+    showIndividualPrices: boolean;
+    tableDiscount: number;
+    frameDiscount: number;
+    totalDiscount: number;
+    vatPercent: number;
+}
+
 // Table Types configuration (prices will be loaded from database)
 const TABLE_TYPE_IDS = {
     none: { id: 'none', name: 'Không chọn', menuId: null },
@@ -203,6 +213,7 @@ export default function QuotePage() {
         tableDiscount: 0,
         frameDiscount: 0,
         totalDiscount: 0,
+        vatPercent: 0,  // VAT percentage (0-100)
     });
 
     // Quote notes with preset options (saved to localStorage)
@@ -1431,8 +1442,8 @@ export default function QuotePage() {
                                         </label>
                                     </div>
 
-                                    {/* Discount Inputs */}
-                                    <div className="grid sm:grid-cols-3 gap-4">
+                                    {/* Discount & VAT Inputs */}
+                                    <div className="grid sm:grid-cols-4 gap-4">
                                         <div>
                                             <label className="block text-sm text-text-secondary mb-1">
                                                 <Percent className="w-4 h-4 inline mr-1" />
@@ -1491,6 +1502,27 @@ export default function QuotePage() {
                                             </div>
                                             {exportOptions.totalDiscount > 0 && (
                                                 <p className="text-xs text-green-600 mt-1">-{formatCurrency(finalTotals.totalDiscountAmount)}</p>
+                                            )}
+                                        </div>
+                                        <div>
+                                            <label className="block text-sm text-text-secondary mb-1">
+                                                <Percent className="w-4 h-4 inline mr-1" />
+                                                Thuế VAT
+                                            </label>
+                                            <div className="flex items-center gap-2">
+                                                <input
+                                                    type="number"
+                                                    value={exportOptions.vatPercent}
+                                                    onChange={(e) => setExportOptions({ ...exportOptions, vatPercent: Math.max(0, Math.min(100, parseFloat(e.target.value) || 0)) })}
+                                                    min="0"
+                                                    max="100"
+                                                    placeholder="0"
+                                                    className="w-full px-3 py-2 border border-gray-200 rounded-lg text-sm"
+                                                />
+                                                <span className="text-sm text-text-secondary">%</span>
+                                            </div>
+                                            {exportOptions.vatPercent > 0 && (
+                                                <p className="text-xs text-accent mt-1">+{formatCurrency(finalTotals.grandTotal * exportOptions.vatPercent / 100)}</p>
                                             )}
                                         </div>
                                     </div>
@@ -1580,16 +1612,51 @@ export default function QuotePage() {
                                             </tfoot>
                                         </table>
                                     ) : (
-                                        /* Show price per table */
-                                        <div className="text-center py-8 bg-gradient-to-r from-accent/5 to-accent/10 rounded-xl">
-                                            <p className="text-text-secondary mb-2">Giá trọn gói / bàn tiệc</p>
-                                            <p className="text-4xl font-bold text-accent">{formatCurrency(finalTotals.pricePerTable)}</p>
-                                            <p className="text-sm text-text-secondary mt-2">
-                                                × {quoteDetails.table_count} bàn = <span className="font-semibold">{formatCurrency(finalTotals.grandTotal)}</span>
-                                            </p>
-                                            {(exportOptions.tableDiscount > 0 || exportOptions.frameDiscount > 0 || exportOptions.totalDiscount > 0) && (
-                                                <p className="text-xs text-green-600 mt-1">(Đã áp dụng giảm giá)</p>
-                                            )}
+                                        /* Show price per table with dish names (no prices) */
+                                        <div className="py-4">
+                                            {/* Dish names list for verification */}
+                                            <div className="mb-4 p-3 bg-gray-50 rounded-lg">
+                                                <p className="text-sm font-medium text-primary mb-2">Thực đơn gồm:</p>
+                                                <div className="flex flex-wrap gap-2">
+                                                    {quoteItems.map((item, idx) => (
+                                                        <span key={item.id} className="inline-flex items-center px-2 py-1 bg-white border border-gray-200 rounded-lg text-sm text-text-secondary">
+                                                            {idx + 1}. {item.name}
+                                                        </span>
+                                                    ))}
+                                                    {quoteDetails.table_type !== 'none' && (
+                                                        <span className="inline-flex items-center px-2 py-1 bg-blue-50 border border-blue-200 rounded-lg text-sm text-blue-700">
+                                                            🪑 {TABLE_TYPE_IDS[quoteDetails.table_type].name}
+                                                        </span>
+                                                    )}
+                                                    {quoteDetails.frame_count > 0 && (
+                                                        <span className="inline-flex items-center px-2 py-1 bg-amber-50 border border-amber-200 rounded-lg text-sm text-amber-700">
+                                                            🎪 Khung rạp x{quoteDetails.frame_count}
+                                                        </span>
+                                                    )}
+                                                    {!exportOptions.customerHandlesStaff && quoteDetails.staff_count > 0 && (
+                                                        <span className="inline-flex items-center px-2 py-1 bg-purple-50 border border-purple-200 rounded-lg text-sm text-purple-700">
+                                                            👤 Nhân viên x{quoteDetails.staff_count}
+                                                        </span>
+                                                    )}
+                                                </div>
+                                            </div>
+
+                                            {/* Price per table display */}
+                                            <div className="text-center py-6 bg-gradient-to-r from-accent/5 to-accent/10 rounded-xl">
+                                                <p className="text-text-secondary mb-2">Giá trọn gói / bàn tiệc</p>
+                                                <p className="text-4xl font-bold text-accent">{formatCurrency(finalTotals.pricePerTable)}</p>
+                                                <p className="text-sm text-text-secondary mt-2">
+                                                    × {quoteDetails.table_count} bàn = <span className="font-semibold">{formatCurrency(finalTotals.grandTotal)}</span>
+                                                </p>
+                                                {exportOptions.vatPercent > 0 && (
+                                                    <p className="text-sm text-accent mt-1">
+                                                        + VAT {exportOptions.vatPercent}% = <span className="font-semibold">{formatCurrency(finalTotals.grandTotal * (1 + exportOptions.vatPercent / 100))}</span>
+                                                    </p>
+                                                )}
+                                                {(exportOptions.tableDiscount > 0 || exportOptions.frameDiscount > 0 || exportOptions.totalDiscount > 0) && (
+                                                    <p className="text-xs text-green-600 mt-1">(Đã áp dụng giảm giá)</p>
+                                                )}
+                                            </div>
                                         </div>
                                     )}
 
