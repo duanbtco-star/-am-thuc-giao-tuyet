@@ -1644,15 +1644,18 @@ export default function QuotePage() {
                                     </div>
                                 </div>
 
-                                {/* Action Buttons */}
-                                <div className="flex flex-wrap gap-3 justify-end print:hidden">
+                                {/* Action Buttons - Improved Visual Hierarchy */}
+                                <div className="flex flex-wrap items-center gap-3 justify-end print:hidden">
+                                    {/* Tertiary: In báo giá - Subtle gray */}
                                     <button
                                         onClick={handlePrint}
-                                        className="flex items-center gap-2 px-6 py-3 bg-gray-100 text-primary rounded-xl font-medium hover:bg-gray-200 transition-all"
+                                        className="flex items-center gap-2 px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl font-medium transition-all"
                                     >
-                                        <Printer className="w-5 h-5" />
+                                        <Printer className="w-4 h-4" />
                                         In báo giá
                                     </button>
+
+                                    {/* Secondary: Xuất PDF - Outlined style */}
                                     <PDFExportButton
                                         quoteData={{
                                             customerName: customerInfo.name,
@@ -1675,14 +1678,16 @@ export default function QuotePage() {
                                             estimatedProfit: finalTotals.totalProfit,
                                         }}
                                     />
+
+                                    {/* Primary: Hoàn thành - Green filled, most prominent */}
                                     <button
                                         onClick={handleSubmitQuote}
                                         disabled={isSubmitting || submitSuccess}
-                                        className={`flex items-center gap-2 px-6 py-3 rounded-xl font-medium transition-all ${submitSuccess
-                                            ? 'bg-green-500 text-white'
+                                        className={`flex items-center gap-2 px-6 py-3 rounded-xl font-semibold shadow-lg transition-all ${submitSuccess
+                                            ? 'bg-green-500 text-white shadow-green-200'
                                             : isSubmitting
-                                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed'
-                                                : 'bg-accent text-white hover:bg-accent-hover'
+                                                ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
+                                                : 'bg-green-500 text-white hover:bg-green-600 shadow-green-200 hover:shadow-green-300'
                                             }`}
                                     >
                                         {isSubmitting ? (
@@ -1697,7 +1702,7 @@ export default function QuotePage() {
                                             </>
                                         ) : (
                                             <>
-                                                <Download className="w-5 h-5" />
+                                                <Check className="w-5 h-5" />
                                                 Hoàn thành
                                             </>
                                         )}
@@ -1737,37 +1742,8 @@ export default function QuotePage() {
                             <ChevronRight className="w-5 h-5" />
                         </button>
                     ) : (
-                        <div className="flex gap-3">
-                            <PDFExportButton
-                                quoteData={{
-                                    customerName: customerInfo.name,
-                                    phone: customerInfo.phone,
-                                    eventType: customerInfo.event_type,
-                                    eventDate: customerInfo.event_date,
-                                    numTables: quoteDetails.table_count,
-                                    numReserveTables: 0,
-                                    dishes: Object.entries(quoteItems).map(([id, item]) => ({
-                                        name: item.name,
-                                        quantity: item.quantity,
-                                        unit: item.unit,
-                                        unitPrice: item.selling_price,
-                                        totalPrice: item.total,
-                                        costPrice: item.cost_price,
-                                        profit: item.profit,
-                                    })),
-                                    totalRevenue: totals.grandTotal,
-                                    totalCost: totals.totalCost,
-                                    estimatedProfit: totals.totalProfit,
-                                }}
-                            />
-                            <button
-                                onClick={() => alert('Báo giá đã được lưu!')}
-                                className="flex items-center gap-2 px-8 py-3 bg-green-500 text-white rounded-full font-medium hover:bg-green-600 transition-all"
-                            >
-                                <Check className="w-5 h-5" />
-                                Hoàn thành
-                            </button>
-                        </div>
+                        /* Step 4: No buttons in bottom nav - actions are in the card above */
+                        <div />
                     )}
                 </div>
             </div>
