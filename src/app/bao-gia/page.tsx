@@ -60,13 +60,30 @@ interface QuoteDetails {
     dishes_input: string;
     staff_count: number;
     table_type: 'none' | 'inox' | 'event';
+    frame_count: number;  // Số khung rạp
 }
 
-// Table Types với giá
-const TABLE_TYPES = {
-    none: { id: 'none', name: 'Không chọn', price: 0 },
-    inox: { id: 'inox', name: 'Bàn ghế inox', price: 50000 }, // 50k/bàn
-    event: { id: 'event', name: 'Bàn ghế sự kiện', price: 150000 }, // 150k/bàn
+// Service prices from database (default values as fallback)
+interface ServicePrices {
+    tableInox: { selling: number; cost: number };
+    tableEvent: { selling: number; cost: number };
+    frame: { selling: number; cost: number };      // Khung rạp
+    staff: { selling: number; cost: number };
+}
+
+// Table Types configuration (prices will be loaded from database)
+const TABLE_TYPE_IDS = {
+    none: { id: 'none', name: 'Không chọn', menuId: null },
+    inox: { id: 'inox', name: 'Bàn ghế inox', menuId: 'BAN-001' },
+    event: { id: 'event', name: 'Bàn ghế sự kiện', menuId: 'BAN-002' },
+};
+
+// Default service prices (fallback if not found in database)
+const DEFAULT_SERVICE_PRICES: ServicePrices = {
+    tableInox: { selling: 250000, cost: 250000 },
+    tableEvent: { selling: 500000, cost: 500000 },
+    frame: { selling: 450000, cost: 400000 },
+    staff: { selling: 350000, cost: 300000 },
 };
 
 // Steps Configuration
@@ -105,6 +122,23 @@ export default function QuotePage() {
                     }));
 
                 setMenuDatabase(transformedMenu);
+
+                // Extract service prices from menu data
+                const extractedPrices: ServicePrices = { ...DEFAULT_SERVICE_PRICES };
+
+                response.data.forEach((item: ApiMenuItem) => {
+                    if (item.menu_id === 'BAN-001') {
+                        extractedPrices.tableInox = { selling: item.selling_price, cost: item.cost_price };
+                    } else if (item.menu_id === 'BAN-002') {
+                        extractedPrices.tableEvent = { selling: item.selling_price, cost: item.cost_price };
+                    } else if (item.menu_id === 'BAN-003') {
+                        extractedPrices.frame = { selling: item.selling_price, cost: item.cost_price };
+                    } else if (item.menu_id === 'NV-001') {
+                        extractedPrices.staff = { selling: item.selling_price, cost: item.cost_price };
+                    }
+                });
+
+                setServicePrices(extractedPrices);
             } else {
                 setMenuError(response.error || 'Không thể tải dữ liệu menu');
             }
@@ -131,7 +165,11 @@ export default function QuotePage() {
         dishes_input: '',
         staff_count: 0,
         table_type: 'none',
+        frame_count: 0,  // Default 0, will auto-suggest based on table_count
     });
+
+    // Service prices extracted from menu database
+    const [servicePrices, setServicePrices] = useState<ServicePrices>(DEFAULT_SERVICE_PRICES);
 
     // Step 3: Parsed Quote Items
     const [quoteItems, setQuoteItems] = useState<QuoteItem[]>([]);
@@ -139,9 +177,11 @@ export default function QuotePage() {
     // Suggestions for unmatched dishes
     const [dishSuggestions, setDishSuggestions] = useState<Map<string, MenuItem[]>>(new Map());
 
-    // Custom prices for table and staff (allow inline editing)
+    // Custom prices for table, staff and frame (allow inline editing)
     const [customTablePrice, setCustomTablePrice] = useState<number | null>(null);
     const [customStaffPrice, setCustomStaffPrice] = useState<number | null>(null);
+    const [customFramePrice, setCustomFramePrice] = useState<number | null>(null);
+    const [customFrameCost, setCustomFrameCost] = useState<number | null>(null);
 
     // Parse dishes from text input and match with database
     // Số lượng mặc định = số bàn (có thể thay đổi)
@@ -251,16 +291,32 @@ export default function QuotePage() {
         }, 0);
         const dishesProfit = dishesTotal - dishesCost;
 
+        // Get base table price from servicePrices based on type
+        const getTablePrice = () => {
+            if (quoteDetails.table_type === 'inox') return servicePrices.tableInox;
+            if (quoteDetails.table_type === 'event') return servicePrices.tableEvent;
+            return { selling: 0, cost: 0 };
+        };
+        const baseTablePrice = getTablePrice();
+
         // Table rental cost (use custom price if set)
-        const effectiveTablePrice = customTablePrice ?? TABLE_TYPES[quoteDetails.table_type].price;
+        const effectiveTablePrice = customTablePrice ?? baseTablePrice.selling;
         const tableTotal = effectiveTablePrice * quoteDetails.table_count;
+        const tableCost = baseTablePrice.cost * quoteDetails.table_count;
 
-        // Staff cost (use custom price if set, default 300k/person)
-        const effectiveStaffPrice = customStaffPrice ?? 300000;
-        const staffCost = quoteDetails.staff_count * effectiveStaffPrice;
+        // Staff cost (use custom price if set)
+        const effectiveStaffPrice = customStaffPrice ?? servicePrices.staff.selling;
+        const staffTotal = quoteDetails.staff_count * effectiveStaffPrice;
+        const staffCost = quoteDetails.staff_count * servicePrices.staff.cost;
 
-        const grandTotal = dishesTotal + tableTotal + staffCost;
-        const totalCost = dishesCost + (tableTotal * 0.6) + (staffCost * 0.7);
+        // Frame cost (Khung rạp)
+        const effectiveFramePrice = customFramePrice ?? servicePrices.frame.selling;
+        const effectiveFrameCost = customFrameCost ?? servicePrices.frame.cost;
+        const frameTotal = quoteDetails.frame_count * effectiveFramePrice;
+        const frameCost = quoteDetails.frame_count * effectiveFrameCost;
+
+        const grandTotal = dishesTotal + tableTotal + staffTotal + frameTotal;
+        const totalCost = dishesCost + tableCost + staffCost + frameCost;
         const totalProfit = grandTotal - totalCost;
 
         return {
@@ -268,14 +324,20 @@ export default function QuotePage() {
             dishesCost,
             dishesProfit,
             tableTotal,
+            tableCost,
+            staffTotal,
             staffCost,
+            frameTotal,
+            frameCost,
             grandTotal,
             totalCost,
             totalProfit,
             effectiveTablePrice,
-            effectiveStaffPrice
+            effectiveStaffPrice,
+            effectiveFramePrice,
+            effectiveFrameCost
         };
-    }, [quoteItems, quoteDetails.table_count, quoteDetails.table_type, quoteDetails.staff_count, customTablePrice, customStaffPrice]);
+    }, [quoteItems, quoteDetails.table_count, quoteDetails.table_type, quoteDetails.staff_count, quoteDetails.frame_count, customTablePrice, customStaffPrice, customFramePrice, customFrameCost, servicePrices]);
 
     // Update quantity in quote items
     const updateQuantity = (itemId: string, newQuantity: number) => {
@@ -638,8 +700,8 @@ export default function QuotePage() {
                             </div>
 
                             <div className="bg-white rounded-2xl p-6 space-y-6">
-                                {/* Table Count & Staff */}
-                                <div className="grid sm:grid-cols-2 gap-5">
+                                {/* Table Count & Staff & Frame */}
+                                <div className="grid sm:grid-cols-3 gap-5">
                                     <div>
                                         <label className="flex items-center gap-2 text-sm font-medium text-primary mb-2">
                                             <Table className="w-4 h-4" />
@@ -670,6 +732,36 @@ export default function QuotePage() {
                                             className="input-apple"
                                         />
                                     </div>
+
+                                    <div>
+                                        <label className="flex items-center gap-2 text-sm font-medium text-primary mb-2">
+                                            🎪 Số khung rạp
+                                        </label>
+                                        <div className="relative">
+                                            <input
+                                                type="number"
+                                                value={quoteDetails.frame_count}
+                                                onChange={(e) => setQuoteDetails({ ...quoteDetails, frame_count: parseInt(e.target.value) || 0 })}
+                                                min="0"
+                                                max="50"
+                                                placeholder="0 = Không cần"
+                                                className="input-apple"
+                                            />
+                                            {quoteDetails.table_count > 0 && quoteDetails.frame_count === 0 && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setQuoteDetails({
+                                                        ...quoteDetails,
+                                                        frame_count: Math.ceil(quoteDetails.table_count / 2)
+                                                    })}
+                                                    className="absolute right-2 top-1/2 -translate-y-1/2 text-xs text-accent hover:underline"
+                                                >
+                                                    Gợi ý: {Math.ceil(quoteDetails.table_count / 2)}
+                                                </button>
+                                            )}
+                                        </div>
+                                        <p className="text-xs text-text-secondary mt-1">1 khung = 2 bàn</p>
+                                    </div>
                                 </div>
 
                                 {/* Table Type */}
@@ -679,22 +771,28 @@ export default function QuotePage() {
                                         Loại bàn ghế
                                     </label>
                                     <div className="grid sm:grid-cols-3 gap-3">
-                                        {Object.values(TABLE_TYPES).map(tableType => (
-                                            <button
-                                                key={tableType.id}
-                                                type="button"
-                                                onClick={() => setQuoteDetails({ ...quoteDetails, table_type: tableType.id as QuoteDetails['table_type'] })}
-                                                className={`p-4 rounded-xl border-2 text-left transition-all ${quoteDetails.table_type === tableType.id
-                                                    ? 'border-accent bg-accent/5'
-                                                    : 'border-gray-200 hover:border-gray-300'
-                                                    }`}
-                                            >
-                                                <p className="font-medium text-primary">{tableType.name}</p>
-                                                {tableType.price > 0 && (
-                                                    <p className="text-sm text-accent mt-1">{formatCurrency(tableType.price)}/bàn</p>
-                                                )}
-                                            </button>
-                                        ))}
+                                        {Object.values(TABLE_TYPE_IDS).map(tableType => {
+                                            // Get price from servicePrices
+                                            const price = tableType.id === 'inox' ? servicePrices.tableInox.selling
+                                                : tableType.id === 'event' ? servicePrices.tableEvent.selling
+                                                    : 0;
+                                            return (
+                                                <button
+                                                    key={tableType.id}
+                                                    type="button"
+                                                    onClick={() => setQuoteDetails({ ...quoteDetails, table_type: tableType.id as QuoteDetails['table_type'] })}
+                                                    className={`p-4 rounded-xl border-2 text-left transition-all ${quoteDetails.table_type === tableType.id
+                                                        ? 'border-accent bg-accent/5'
+                                                        : 'border-gray-200 hover:border-gray-300'
+                                                        }`}
+                                                >
+                                                    <p className="font-medium text-primary">{tableType.name}</p>
+                                                    {price > 0 && (
+                                                        <p className="text-sm text-accent mt-1">{formatCurrency(price)}/bàn</p>
+                                                    )}
+                                                </button>
+                                            );
+                                        })}
                                     </div>
                                 </div>
 
@@ -830,7 +928,7 @@ export default function QuotePage() {
                                         )}
                                         {quoteDetails.table_type !== 'none' && (
                                             <span className="px-3 py-1 bg-purple-100 text-purple-700 rounded-full font-medium">
-                                                {TABLE_TYPES[quoteDetails.table_type].name}
+                                                {TABLE_TYPE_IDS[quoteDetails.table_type].name}
                                             </span>
                                         )}
                                     </div>
@@ -929,7 +1027,7 @@ export default function QuotePage() {
                                                 <tr className="bg-gray-50/50">
                                                     <td className="px-3 py-3 text-text-secondary">{quoteItems.length + 1}</td>
                                                     <td className="px-3 py-3 font-medium text-primary">
-                                                        {TABLE_TYPES[quoteDetails.table_type].name}
+                                                        {TABLE_TYPE_IDS[quoteDetails.table_type].name}
                                                     </td>
                                                     <td className="px-3 py-3">
                                                         <input
@@ -960,10 +1058,66 @@ export default function QuotePage() {
                                                         {formatCurrency(totals.tableTotal)}
                                                     </td>
                                                     <td className="px-3 py-3 text-right text-orange-600 bg-orange-50/50 print:hidden">
-                                                        {formatCurrency(totals.tableTotal * 0.6)}
+                                                        {formatCurrency(totals.tableCost)}
                                                     </td>
                                                     <td className="px-3 py-3 text-right font-medium text-green-600 bg-green-50/50 print:hidden">
-                                                        {formatCurrency(totals.tableTotal * 0.4)}
+                                                        {formatCurrency(totals.tableTotal - totals.tableCost)}
+                                                    </td>
+                                                    <td className="px-3 py-3 print:hidden"></td>
+                                                </tr>
+                                            )}
+
+                                            {/* Khung rạp (cho phép thay đổi số lượng, đơn giá VÀ giá gốc) */}
+                                            {quoteDetails.frame_count > 0 && (
+                                                <tr className="bg-amber-50/50">
+                                                    <td className="px-3 py-3 text-text-secondary">{quoteItems.length + (quoteDetails.table_type !== 'none' ? 2 : 1)}</td>
+                                                    <td className="px-3 py-3 font-medium text-primary">🎪 Khung rạp</td>
+                                                    <td className="px-3 py-3">
+                                                        <input
+                                                            type="number"
+                                                            value={quoteDetails.frame_count}
+                                                            onChange={(e) => setQuoteDetails({ ...quoteDetails, frame_count: Math.max(0, parseInt(e.target.value) || 0) })}
+                                                            min="0"
+                                                            className="w-16 px-2 py-1 text-center border border-gray-200 rounded-lg print:border-none print:bg-transparent"
+                                                        />
+                                                    </td>
+                                                    <td className="px-3 py-3 text-right">
+                                                        <div className="flex items-center justify-end gap-1">
+                                                            <input
+                                                                type="number"
+                                                                value={totals.effectiveFramePrice}
+                                                                onChange={(e) => setCustomFramePrice(Math.max(0, parseInt(e.target.value) || 0))}
+                                                                min="0"
+                                                                step="10000"
+                                                                className={`w-24 px-2 py-1 text-right border rounded-lg print:border-none print:bg-transparent ${customFramePrice !== null ? 'border-blue-400 bg-blue-50' : 'border-gray-200'
+                                                                    }`}
+                                                            />
+                                                            {customFramePrice !== null && (
+                                                                <span className="text-blue-500 text-xs" title="Đã chỉnh sửa">✎</span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-3 py-3 text-right font-medium text-primary">
+                                                        {formatCurrency(totals.frameTotal)}
+                                                    </td>
+                                                    <td className="px-3 py-3 text-right bg-orange-50/50 print:hidden">
+                                                        <div className="flex items-center justify-end gap-1">
+                                                            <input
+                                                                type="number"
+                                                                value={totals.effectiveFrameCost}
+                                                                onChange={(e) => setCustomFrameCost(Math.max(0, parseInt(e.target.value) || 0))}
+                                                                min="0"
+                                                                step="10000"
+                                                                className={`w-24 px-2 py-1 text-right border rounded-lg ${customFrameCost !== null ? 'border-orange-400 bg-orange-100' : 'border-gray-200 bg-white'
+                                                                    }`}
+                                                            />
+                                                            {customFrameCost !== null && (
+                                                                <span className="text-orange-500 text-xs" title="Đã chỉnh sửa">✎</span>
+                                                            )}
+                                                        </div>
+                                                    </td>
+                                                    <td className="px-3 py-3 text-right font-medium text-green-600 bg-green-50/50 print:hidden">
+                                                        {formatCurrency(totals.frameTotal - totals.frameCost)}
                                                     </td>
                                                     <td className="px-3 py-3 print:hidden"></td>
                                                 </tr>
@@ -972,7 +1126,9 @@ export default function QuotePage() {
                                             {/* Nhân viên phục vụ (cho phép thay đổi số lượng VÀ đơn giá) */}
                                             {quoteDetails.staff_count > 0 && (
                                                 <tr className="bg-gray-50/50">
-                                                    <td className="px-3 py-3 text-text-secondary">{quoteItems.length + (quoteDetails.table_type !== 'none' ? 2 : 1)}</td>
+                                                    <td className="px-3 py-3 text-text-secondary">
+                                                        {quoteItems.length + (quoteDetails.table_type !== 'none' ? 1 : 0) + (quoteDetails.frame_count > 0 ? 1 : 0) + 1}
+                                                    </td>
                                                     <td className="px-3 py-3 font-medium text-primary">Nhân viên phục vụ</td>
                                                     <td className="px-3 py-3">
                                                         <input
@@ -1000,13 +1156,13 @@ export default function QuotePage() {
                                                         </div>
                                                     </td>
                                                     <td className="px-3 py-3 text-right font-medium text-primary">
-                                                        {formatCurrency(totals.staffCost)}
+                                                        {formatCurrency(totals.staffTotal)}
                                                     </td>
                                                     <td className="px-3 py-3 text-right text-orange-600 bg-orange-50/50 print:hidden">
-                                                        {formatCurrency(totals.staffCost * 0.7)}
+                                                        {formatCurrency(totals.staffCost)}
                                                     </td>
                                                     <td className="px-3 py-3 text-right font-medium text-green-600 bg-green-50/50 print:hidden">
-                                                        {formatCurrency(totals.staffCost * 0.3)}
+                                                        {formatCurrency(totals.staffTotal - totals.staffCost)}
                                                     </td>
                                                     <td className="px-3 py-3 print:hidden"></td>
                                                 </tr>
