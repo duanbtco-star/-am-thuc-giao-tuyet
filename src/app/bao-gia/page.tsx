@@ -1788,27 +1788,26 @@ export default function QuotePage() {
                                             In báo giá
                                         </button>
 
+
                                         {/* Secondary: Xuất PDF - Outlined style */}
                                         <PDFExportButton
                                             quoteData={{
                                                 customerName: customerInfo.name,
                                                 phone: customerInfo.phone,
+                                                address: customerInfo.address,
                                                 eventType: customerInfo.event_type,
                                                 eventDate: customerInfo.event_date,
                                                 numTables: quoteDetails.table_count,
-                                                numReserveTables: 0,
                                                 dishes: quoteItems.map((item) => ({
                                                     name: item.name,
                                                     quantity: item.quantity,
                                                     unit: item.unit,
                                                     unitPrice: item.custom_selling_price ?? item.selling_price,
                                                     totalPrice: item.total,
-                                                    costPrice: item.custom_cost_price ?? item.cost_price,
-                                                    profit: item.profit,
                                                 })),
+                                                pricePerTable: finalTotals.pricePerTable,
                                                 totalRevenue: finalTotals.grandTotal,
-                                                totalCost: finalTotals.totalCost,
-                                                estimatedProfit: finalTotals.totalProfit,
+                                                notes: quoteNote,
                                             }}
                                         />
 
