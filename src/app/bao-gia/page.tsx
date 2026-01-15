@@ -156,11 +156,20 @@ export default function QuotePage() {
         const unmatched: string[] = [];
 
         lines.forEach(line => {
-            // Try to parse "dish name x quantity" or "dish name - quantity" or just "dish name"
-            const match = line.match(/^(.+?)\s*[xX×\-]\s*(\d+)$/) ||
-                line.match(/^(\d+)\s*[xX×\-]?\s*(.+)$/);
+            // FIRST: Strip ordinal numbers at the beginning (e.g., "1.", "2.", "3.")
+            // This prevents "1. Tôm chiên" from being parsed as quantity=1
+            let cleanedLine = line.replace(/^\d+\.\s*/, '').trim();
 
-            let dishName = line;
+            // If the entire line was just a number with period, skip it
+            if (!cleanedLine) return;
+
+            // Try to parse "dish name x quantity" or "dish name - quantity" or just "dish name"
+            // Pattern 1: "Gà luộc x 10" or "Gà luộc - 10"
+            // Pattern 2: "10 x Gà luộc" or "10 Gà luộc" (quantity at start WITHOUT period)
+            const match = cleanedLine.match(/^(.+?)\s*[xX×\-]\s*(\d+)$/) ||
+                cleanedLine.match(/^(\d+)\s*[xX×]\s*(.+)$/);  // Require x/X/× separator for quantity-first format
+
+            let dishName = cleanedLine;
             let quantity = tableCount; // Mặc định = số bàn
             let hasExplicitQuantity = false;
 
