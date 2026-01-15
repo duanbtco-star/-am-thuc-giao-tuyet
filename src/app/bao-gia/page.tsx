@@ -521,7 +521,7 @@ export default function QuotePage() {
     };
 
     const handleNext = () => {
-        if (canProceed() && currentStep < 3) {
+        if (canProceed() && currentStep < 4) {
             if (currentStep === 2) {
                 // Parse dishes when moving to step 3
                 parseDishesFromInput();
