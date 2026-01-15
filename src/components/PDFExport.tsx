@@ -187,12 +187,12 @@ export function PDFExportButton({ quoteData, className = '' }: PDFExportButtonPr
         document.body.appendChild(link);
         link.click();
 
-        // Wait 100ms to allow browser to start download with correct filename
-        // before cleaning up the blob URL
+        // Wait 500ms to allow browser to start download with correct filename
+        // before cleaning up the blob URL (100ms was insufficient for some browsers)
         setTimeout(() => {
             document.body.removeChild(link);
             URL.revokeObjectURL(url);
-        }, 100);
+        }, 500);
 
         // Clean up PDF element
         document.body.removeChild(element);
