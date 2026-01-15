@@ -157,11 +157,12 @@ async function postToSheets<T>(
     }
 
     try {
+        // Critical: Do NOT include Content-Type header as it triggers CORS preflight
+        // Google Apps Script does not support OPTIONS requests
+        // Use redirect: 'follow' to properly handle Google's redirect chain
         const response = await fetch(GOOGLE_SCRIPT_URL, {
             method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-            },
+            redirect: 'follow',
             body: JSON.stringify({ action, ...body }),
         });
 
