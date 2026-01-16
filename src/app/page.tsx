@@ -107,7 +107,7 @@ const quickLinks = [
     { title: 'Quản lý đơn', href: '/don-hang', icon: ShoppingCart, color: 'from-orange-500 to-red-500' },
     { title: 'Lịch sự kiện', href: '/lich', icon: Calendar, color: 'from-purple-500 to-pink-500' },
     { title: 'Tài chính', href: '/tai-chinh', icon: Wallet, color: 'from-green-500 to-emerald-500' },
-    { title: 'Nhân sự', href: '/hr/employees', icon: Users, color: 'from-teal-500 to-cyan-500' },
+    { title: 'Nhân sự', href: '/hr', icon: Users, color: 'from-teal-500 to-cyan-500' },
     { title: 'Nhà cung cấp', href: '/vendor', icon: Store, color: 'from-amber-500 to-orange-500' },
     { title: 'Báo cáo', href: '/bao-cao', icon: BarChart3, color: 'from-indigo-500 to-blue-500' },
     { title: 'Cài đặt', href: '/settings', icon: MoreHorizontal, color: 'from-gray-500 to-slate-600' },
