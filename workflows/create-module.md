@@ -59,6 +59,53 @@ checkpoints:
 
 ---
 
+## Step 0: Load Global Rules (BẮT BUỘC) 🚨
+
+> ⚠️ **MANDATORY**: Bước này PHẢI thực hiện trước khi làm bất cứ điều gì!
+
+### 0.1 Đọc Core Rules
+```
+Mở file: prompts/rules/core.md
+```
+**Ghi nhớ:**
+- Priority: `UX → UI → FE → BE → DA`
+- Stack: Next.js 14+ + Supabase
+- RLS mandatory
+- Multi-tenancy với tenant_id
+
+### 0.2 Đọc Orchestrator Flow
+```
+Mở file: prompts/orchestrator.md
+```
+
+### 0.3 Load ALL Rules (Module = Full Stack)
+Vì tạo module mới ảnh hưởng toàn bộ stack, load tất cả:
+```
+prompts/rules/database.md
+prompts/rules/frontend.md
+prompts/rules/security.md
+prompts/rules/domain-logic.md
+```
+
+### 0.4 Load Specialists
+```
+prompts/specialists/database.md
+prompts/specialists/backend.md
+prompts/specialists/frontend.md
+prompts/specialists/auth.md
+```
+
+### ✅ Checkpoint: `rules_loaded`
+```
+□ core.md loaded
+□ orchestrator.md loaded
+□ ALL dimension rules loaded
+□ ALL specialists loaded
+→ PROCEED to Step 1
+```
+
+---
+
 ## Step 1: Module Planning (Lập kế hoạch)
 
 ### 📍 CHECKPOINT: `planning_complete`

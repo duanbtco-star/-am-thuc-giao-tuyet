@@ -1,167 +1,166 @@
-# Database Rules (Load for DA Dimension)
+# Database Rules - Ẩm Thực Giáo Tuyết
 
-> **Load when**: Working on database schema, migrations, SQL queries.
-> Size: ~8KB
+> **Load when**: Database schema, migrations, SQL queries.
+> **Stack**: Supabase (PostgreSQL), Single-tenant
 
 ---
 
-## 1. RLS Enforcement (MANDATORY)
+## 1. RLS Configuration (Single-Tenant)
 
-> ⚠️ **CRITICAL**: Any code violating RLS rules MUST be REJECTED.
+> ⚠️ **Single-tenant**: Không cần `tenant_id`, nhưng vẫn bật RLS.
 
-### 1.1 Database Layer (SQL/Migrations)
-**EVERY new table MUST include:**
-
+### 1.1 Standard Table Template
 ```sql
--- Step 1: Add tenant_id column
 CREATE TABLE {table_name} (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id UUID NOT NULL REFERENCES tenants(id),
-    -- other columns
-    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
-    updated_at TIMESTAMP WITH TIME ZONE DEFAULT NOW()
+    -- columns here
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
--- Step 2: Enable RLS
+-- Enable RLS
 ALTER TABLE {table_name} ENABLE ROW LEVEL SECURITY;
 
--- Step 3: Create isolation policy
-CREATE POLICY tenant_isolation ON {table_name}
-    USING (tenant_id = current_setting('app.current_tenant')::uuid)
-    WITH CHECK (tenant_id = current_setting('app.current_tenant')::uuid);
+-- Simple policies for single-tenant
+CREATE POLICY "Enable read for all" ON {table_name}
+    FOR SELECT USING (true);
 
--- Step 4: Index on tenant_id
-CREATE INDEX idx_{table_name}_tenant ON {table_name}(tenant_id);
+CREATE POLICY "Enable insert for auth" ON {table_name}
+    FOR INSERT WITH CHECK (true);
+
+CREATE POLICY "Enable update for auth" ON {table_name}
+    FOR UPDATE USING (true);
+
+CREATE POLICY "Enable delete for auth" ON {table_name}
+    FOR DELETE USING (true);
+
+-- Auto-update timestamp trigger
+CREATE TRIGGER set_{table_name}_updated_at
+    BEFORE UPDATE ON {table_name}
+    FOR EACH ROW
+    EXECUTE FUNCTION update_updated_at_column();
 ```
 
-### 1.2 RLS Code Review Checklist
-| Check Item | Required | Rejection |
-| :--- | :---: | :---: |
-| Table has `tenant_id` column | ✅ | ❌ REJECT |
-| `ENABLE ROW LEVEL SECURITY` executed | ✅ | ❌ REJECT |
-| `CREATE POLICY tenant_isolation` exists | ✅ | ❌ REJECT |
-| Index on `tenant_id` created | ✅ | ❌ REJECT |
-| Go code sets `app.current_tenant` before queries | ✅ | ❌ REJECT |
-
-### 1.3 Exception Tables (No RLS Required)
-| Table | Reason |
-| :--- | :--- |
-| `tenants` | Parent table for tenant_id |
-| `system_config` | Global configuration |
-| `migrations` | Schema versioning |
+### 1.2 Checklist mỗi table
+- [ ] `id UUID PRIMARY KEY DEFAULT gen_random_uuid()`
+- [ ] `created_at TIMESTAMPTZ DEFAULT NOW()`
+- [ ] `updated_at TIMESTAMPTZ DEFAULT NOW()`
+- [ ] `ENABLE ROW LEVEL SECURITY`
+- [ ] Policies cho SELECT, INSERT, UPDATE, DELETE
+- [ ] Trigger cập nhật `updated_at`
 
 ---
 
-## 2. Database Design Patterns
+## 2. Existing Tables
 
-### 2.1 ltree for Hierarchies (WBS, Categories)
+| Table | Purpose | Key Columns |
+|:---|:---|:---|
+| `menus` | Thực đơn | `name`, `selling_price`, `category` |
+| `quotes` | Báo giá | `quote_number`, `customer_name`, `dishes` |
+| `orders` | Đơn hàng | `order_number`, `event_date`, `status` |
+| `calendar_events` | Lịch | `event_date`, `order_id` |
+| `vendors` | Nhà cung cấp | `name`, `category`, `phone` |
+| `transactions` | Thu chi | `type`, `amount`, `date` |
+| `settings` | Cài đặt | `key`, `value` |
+
+---
+
+## 3. JSONB Usage
+
+### 3.1 Storing Dishes in Quotes
 ```sql
-CREATE EXTENSION IF NOT EXISTS ltree;
+-- Format
+dishes JSONB DEFAULT '[]'
 
-CREATE TABLE work_packages (
-    id UUID PRIMARY KEY,
-    tenant_id UUID NOT NULL,
-    wbs_path ltree NOT NULL  -- e.g., 'Project1.Phase1.Task1'
-);
-
-CREATE INDEX idx_wbs_path ON work_packages USING GIST (wbs_path);
-
--- Get all children
-SELECT * FROM work_packages WHERE wbs_path <@ 'Project1.Phase1';
+-- Example data
+[
+  {"name": "Gà hấp lá chanh", "price": 180000, "quantity": 10},
+  {"name": "Canh chua cá lóc", "price": 120000, "quantity": 5}
+]
 ```
 
-### 2.2 JSONB for Dynamic Attributes
+### 3.2 Querying JSONB
 ```sql
-CREATE TABLE items (
-    id UUID PRIMARY KEY,
-    tenant_id UUID NOT NULL,
-    specs JSONB DEFAULT '{}'
-);
+-- Get total dishes count
+SELECT jsonb_array_length(dishes) FROM quotes;
 
--- Validate with pg_jsonschema
-ALTER TABLE items ADD CONSTRAINT valid_specs
-    CHECK (jsonb_matches_schema('{ "type": "object" }', specs));
-
--- Index for queries
-CREATE INDEX idx_items_specs ON items USING GIN (specs);
-```
-
-### 2.3 Closure Table for Account Hierarchies
-```sql
-CREATE TABLE account_closure (
-    ancestor_id UUID NOT NULL,
-    descendant_id UUID NOT NULL,
-    depth INTEGER NOT NULL,
-    PRIMARY KEY (ancestor_id, descendant_id)
-);
-```
-
-### 2.4 Optimistic Locking
-```sql
-CREATE TABLE orders (
-    id UUID PRIMARY KEY,
-    tenant_id UUID NOT NULL,
-    version INTEGER DEFAULT 1
-);
-
--- Update with version check
-UPDATE orders 
-SET version = version + 1, status = 'approved'
-WHERE id = $1 AND version = $2
-RETURNING *;
--- If 0 rows → 409 Conflict
+-- Extract dish names
+SELECT dish->>'name' as dish_name
+FROM quotes, jsonb_array_elements(dishes) AS dish;
 ```
 
 ---
 
-## 3. Migration Strategy
+## 4. Auto-Generated Numbers
 
-### 3.1 Migration Workflow
+### 4.1 Quote Number Format
 ```
-┌─────────────────────────────────────────────────────────────────┐
-│ Phase 1: Additive Change (Compatible)                           │
-│  ALTER TABLE orders ADD COLUMN new_status TEXT;                 │
-│  → Deploy new code that writes BOTH old and new                 │
-├─────────────────────────────────────────────────────────────────┤
-│ Phase 2: Data Migration                                         │
-│  UPDATE orders SET new_status = old_status WHERE new_status IS NULL;│
-│  → Run in batches to avoid locking                              │
-├─────────────────────────────────────────────────────────────────┤
-│ Phase 3: Code Switch                                            │
-│  → All code now reads/writes new_status only                    │
-├─────────────────────────────────────────────────────────────────┤
-│ Phase 4: Remove Old (Cleanup)                                   │
-│  ALTER TABLE orders DROP COLUMN old_status;                     │
-└─────────────────────────────────────────────────────────────────┘
+BGAM001-DDMMYYYY
 ```
 
-### 3.2 Migration File Template
+### 4.2 Order Number Format
+```
+ORD001-DDMMYYYY
+```
+
+**Generated by**: PostgreSQL trigger functions
+
+---
+
+## 5. Migration Strategy
+
+### 5.1 File Location
+```
+supabase/migrations/{timestamp}_{description}.sql
+```
+
+### 5.2 Migration Template
 ```sql
--- migrations/20260112_create_{table}.up.sql
+-- supabase/migrations/002_add_feature.sql
 BEGIN;
 
-CREATE TABLE {table_name} (...);
-ALTER TABLE {table_name} ENABLE ROW LEVEL SECURITY;
-CREATE POLICY tenant_isolation ON {table_name} ...;
-CREATE INDEX idx_{table_name}_tenant ON {table_name}(tenant_id);
+-- Add new column
+ALTER TABLE {table} ADD COLUMN new_col TYPE;
 
-COMMIT;
+-- Create new table
+CREATE TABLE new_table (...);
+ALTER TABLE new_table ENABLE ROW LEVEL SECURITY;
+-- policies...
 
--- migrations/20260112_create_{table}.down.sql
-BEGIN;
-DROP TABLE IF EXISTS {table_name} CASCADE;
 COMMIT;
 ```
 
 ---
 
-## 4. Naming Conventions
+## 6. Naming Conventions
 
 | Element | Convention | Example |
-| :--- | :--- | :--- |
-| Table | `snake_case`, plural | `purchase_orders` |
-| Column | `snake_case` | `created_at` |
+|:---|:---|:---|
+| Table | `snake_case`, plural | `calendar_events` |
+| Column | `snake_case` | `event_date` |
 | Primary Key | `id` | `id UUID` |
 | Foreign Key | `{table}_id` | `order_id` |
-| Index | `idx_{table}_{columns}` | `idx_orders_tenant` |
-| Policy | `{purpose}` | `tenant_isolation` |
+| Index | `idx_{table}_{column}` | `idx_orders_status` |
+
+---
+
+## 7. Common Queries
+
+### 7.1 Get Today's Orders
+```sql
+SELECT * FROM orders 
+WHERE event_date = CURRENT_DATE 
+ORDER BY created_at DESC;
+```
+
+### 7.2 Monthly Revenue Report
+```sql
+SELECT 
+    DATE_TRUNC('month', date) as month,
+    SUM(CASE WHEN type = 'income' THEN amount ELSE 0 END) as income,
+    SUM(CASE WHEN type = 'expense' THEN amount ELSE 0 END) as expense
+FROM transactions
+WHERE date >= DATE_TRUNC('year', CURRENT_DATE)
+GROUP BY 1
+ORDER BY 1;
+```

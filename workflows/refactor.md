@@ -11,6 +11,28 @@ description: Quy trình refactor code một cách an toàn
 
 ---
 
+## Step 0: Load Global Rules (BẮT BUỘC) 🚨
+
+> ⚠️ **MANDATORY**: Đọc rules trước khi refactor!
+
+### 0.1 Đọc Core Rules
+```
+prompts/rules/core.md
+prompts/orchestrator.md
+```
+
+### 0.2 Load Rules theo scope refactor
+| Scope | File |
+|:---|:---|
+| Database | `prompts/rules/database.md` |
+| Frontend | `prompts/rules/frontend.md` |
+| Backend | `prompts/rules/security.md` |
+
+### ✅ Checkpoint: `rules_loaded`
+→ PROCEED to Step 1
+
+---
+
 ## Step 1: Refactor Planning (Lập kế hoạch)
 
 ### 1.1 Xác định scope

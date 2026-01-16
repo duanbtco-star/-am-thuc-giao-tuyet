@@ -1,46 +1,27 @@
-# Rules Index (Lazy Loading Guide)
+# Rules Index - Ẩm Thực Giáo Tuyết
 
 > **Purpose**: Load only the rules you need to save tokens.
-> Original `rules.md` = ~32KB. Modular approach = Load ~5-8KB per domain.
+> **Project**: Single-tenant Catering Management System
 
 ---
 
 ## Available Rules Files
 
 | File | Size | When to Load |
-| :--- | :---: | :--- |
+|:---|:---:|:---|
 | `rules/core.md` | ~3KB | **ALWAYS** - Every task |
-| `rules/database.md` | ~5KB | DA dimension, SQL, migrations |
-| `rules/frontend.md` | ~4KB | FE/UI dimension, React, Next.js |
-| `rules/security.md` | ~5KB | Auth, permissions, audit |
-| `rules/domain-logic.md` | ~5KB | Business logic, calculations |
+| `rules/database.md` | ~4KB | Database, SQL, migrations |
+| `rules/frontend.md` | ~4KB | React, Next.js, UI |
+| `rules/security.md` | ~3KB | Auth, permissions |
+| `rules/domain-logic.md` | ~4KB | Business logic, calculations |
 
 ---
 
 ## Loading Strategy
 
-### For Orchestrator
-```
-Step 1 (Analysis):
-  → ALWAYS load: rules/core.md
-  
-Step 2 (Database):
-  → Load: rules/core.md + rules/database.md
-  
-Step 3 (Backend):
-  → Load: rules/core.md + rules/security.md
-  
-Step 4 (Frontend):
-  → Load: rules/core.md + rules/frontend.md
-  
-Step 5-8:
-  → Load: rules/core.md only
-```
-
 ### By 5-Dimension Assessment
-
 | Dimension | Load Rules |
-| :--- | :--- |
+|:---|:---|
 | **UX** | core.md |
 | **UI** | core.md + frontend.md |
 | **FE** | core.md + frontend.md |
@@ -49,45 +30,45 @@ Step 5-8:
 
 ---
 
-## Token Savings Comparison
+## 🚀 Auto-Run Commands
 
-| Scenario | Full Load | Selective | Savings |
-| :--- | :---: | :---: | :---: |
-| Database task | 32KB | 8KB | **75%** |
-| Frontend task | 32KB | 7KB | **78%** |
-| Full feature | 32KB | 22KB | **31%** |
-| Quick review | 32KB | 3KB | **91%** |
+Các lệnh sau **tự động chạy không cần xác nhận**:
+
+```bash
+npm run dev          # Dev server
+npm run build        # Build
+npm run lint         # Lint check
+npx supabase *       # All supabase commands
+git status/log/diff  # Read-only git
+```
 
 ---
 
-## Quick Reference
+## Core Rules Summary
 
-### Core Rules Summary
-- Priority: `UX → UI → FE → BE → DA`
-- Architecture: Modular Monolith
-- Stack: Go + PostgreSQL + Next.js
-- Multi-tenancy: RLS mandatory
-- Language: Vietnamese for docs
-
-### When to Load Full rules.md
-Load the original `.agent/rules.md` only when:
-- First-time project setup
-- Complete audit needed
-- Onboarding new AI agent
+- **Priority**: `UX → UI → FE → BE → DA`
+- **Architecture**: Single-tenant Monolith
+- **Stack**: Next.js + Supabase
+- **Language**: Vietnamese for docs
 
 ---
 
 ## File Paths
 
 ```
-.agent/
-├── rules.md                    # Original (32KB, deprecated for daily use)
-└── prompts/
-    └── rules/
-        ├── index.md            # This file
-        ├── core.md             # Always load
-        ├── database.md         # DA dimension
-        ├── frontend.md         # FE/UI dimension
-        ├── security.md         # Auth/Permission
-        └── domain-logic.md     # Business rules
+prompts/
+├── orchestrator.md          # Main workflow
+├── rules/
+│   ├── index.md             # This file
+│   ├── core.md              # Always load
+│   ├── database.md          # DA dimension
+│   ├── frontend.md          # FE/UI dimension
+│   ├── security.md          # Auth
+│   └── domain-logic.md      # Business rules
+└── specialists/
+    ├── auth.md
+    ├── backend.md
+    ├── database.md
+    ├── frontend.md
+    └── ...
 ```

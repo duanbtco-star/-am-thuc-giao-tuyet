@@ -24,7 +24,7 @@ import {
     Sparkles,
     Loader2,
     FileOutput,
-    Settings2,
+    Settings,
     Percent
 } from 'lucide-react';
 import { formatCurrency, findSimilarItems } from '@/lib/utils';
@@ -603,28 +603,40 @@ export default function QuotePage() {
             const quoteData = {
                 customer_name: customerInfo.name,
                 phone: customerInfo.phone,
+                address: customerInfo.address,
                 event_type: customerInfo.event_type,
-                event_date: customerInfo.event_date,
-                location: customerInfo.address,
+                event_date: customerInfo.event_date || null,
                 num_tables: quoteDetails.table_count,
-                dishes_input: quoteDetails.dishes_input,
-                staff_count: quoteDetails.staff_count,
-                table_type: quoteDetails.table_type,
+                dishes: quoteItems.map(item => ({
+                    id: item.id,
+                    name: item.name,
+                    quantity: item.quantity,
+                    selling_price: item.custom_selling_price ?? item.selling_price,
+                    cost_price: item.custom_cost_price ?? item.cost_price,
+                })),
+                price_per_table: quoteDetails.table_count > 0 ? Math.round(totals.grandTotal / quoteDetails.table_count) : 0,
                 subtotal: totals.dishesTotal,
+                vat_percent: 0,
                 total: totals.grandTotal,
-                status: 'draft' as const,
+                status: 'draft',
+                notes: customerInfo.notes || null,
             };
 
-            const response = await quoteApi.create(quoteData);
+            const response = await fetch('/api/quotes', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify(quoteData),
+            });
 
-            if (response.success) {
+            if (response.ok) {
                 setSubmitSuccess(true);
                 setTimeout(() => {
                     // Reset form or redirect after 2 seconds
                     window.location.href = '/';
                 }, 2000);
             } else {
-                setSubmitError(response.error || 'Không thể lưu báo giá. Vui lòng thử lại.');
+                const errorData = await response.json();
+                setSubmitError(errorData.error || 'Không thể lưu báo giá. Vui lòng thử lại.');
             }
         } catch (error) {
             setSubmitError('Đã xảy ra lỗi khi lưu báo giá.');
@@ -1449,7 +1461,7 @@ export default function QuotePage() {
                                 {/* Export Options Panel */}
                                 <div className="mb-6 p-4 bg-gray-50 rounded-xl border border-gray-200">
                                     <h3 className="flex items-center gap-2 font-semibold text-primary mb-4">
-                                        <Settings2 className="w-5 h-5" />
+                                        <Settings className="w-5 h-5" />
                                         Tùy chọn xuất báo giá
                                     </h3>
 
@@ -1805,9 +1817,8 @@ export default function QuotePage() {
                                     </div>
                                 </div>
 
-                                {/* Action Buttons - Improved Visual Hierarchy */}
-                                <div className="flex flex-wrap items-center gap-3 justify-between print:hidden">
-                                    {/* Back Button */}
+                                {/* Step 3 Navigation */}
+                                <div className="flex justify-between pt-4 border-t border-gray-100 print:hidden">
                                     <button
                                         onClick={handleBack}
                                         className="flex items-center gap-2 px-6 py-3 text-text-secondary hover:bg-gray-100 rounded-xl font-medium transition-all"
@@ -1815,71 +1826,13 @@ export default function QuotePage() {
                                         <ChevronLeft className="w-5 h-5" />
                                         Quay lại
                                     </button>
-
-                                    {/* Action Buttons Group */}
-                                    <div className="flex items-center gap-3">
-                                        {/* Tertiary: In báo giá - Subtle gray */}
-                                        <button
-                                            onClick={handlePrint}
-                                            className="flex items-center gap-2 px-5 py-2.5 text-gray-600 hover:bg-gray-100 rounded-xl font-medium transition-all"
-                                        >
-                                            <Printer className="w-4 h-4" />
-                                            In báo giá
-                                        </button>
-
-
-                                        {/* Secondary: Xuất PDF - Outlined style */}
-                                        <PDFExportButton
-                                            quoteData={{
-                                                quoteNumber: quoteNumber,
-                                                customerName: customerInfo.name,
-                                                phone: customerInfo.phone,
-                                                address: customerInfo.address,
-                                                eventType: customerInfo.event_type,
-                                                eventDate: customerInfo.event_date,
-                                                numTables: quoteDetails.table_count,
-                                                dishes: quoteItems.map((item) => ({
-                                                    name: item.name,
-                                                    quantity: item.quantity,
-                                                    unit: item.unit,
-                                                    unitPrice: item.custom_selling_price ?? item.selling_price,
-                                                    totalPrice: item.total,
-                                                })),
-                                                pricePerTable: finalTotals.pricePerTable,
-                                                totalRevenue: finalTotals.grandTotal,
-                                                notes: quoteNote,
-                                            }}
-                                        />
-
-                                        {/* Primary: Hoàn thành - Green filled, most prominent */}
-                                        <button
-                                            onClick={handleSubmitQuote}
-                                            disabled={isSubmitting || submitSuccess}
-                                            className={`flex items-center gap-2 px-6 py-3 rounded-xl font-semibold shadow-lg transition-all ${submitSuccess
-                                                ? 'bg-green-500 text-white shadow-green-200'
-                                                : isSubmitting
-                                                    ? 'bg-gray-300 text-gray-500 cursor-not-allowed shadow-none'
-                                                    : 'bg-green-500 text-white hover:bg-green-600 shadow-green-200 hover:shadow-green-300'
-                                                }`}
-                                        >
-                                            {isSubmitting ? (
-                                                <>
-                                                    <Loader2 className="w-5 h-5 animate-spin" />
-                                                    Đang lưu...
-                                                </>
-                                            ) : submitSuccess ? (
-                                                <>
-                                                    <Check className="w-5 h-5" />
-                                                    Đã lưu!
-                                                </>
-                                            ) : (
-                                                <>
-                                                    <Check className="w-5 h-5" />
-                                                    Hoàn thành
-                                                </>
-                                            )}
-                                        </button>
-                                    </div>
+                                    <button
+                                        onClick={handleNext}
+                                        className="flex items-center gap-2 px-8 py-3 rounded-xl font-medium transition-all bg-accent text-white hover:bg-accent-hover"
+                                    >
+                                        Tiếp tục
+                                        <ChevronRight className="w-5 h-5" />
+                                    </button>
                                 </div>
                             </div>
                         </motion.div>

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import {
@@ -22,7 +22,8 @@ import {
     ShoppingBag,
     Truck,
     Users as UsersIcon,
-    Package
+    Package,
+    Loader2
 } from 'lucide-react';
 import { formatCurrency, formatDate, generateId } from '@/lib/utils';
 import { FinanceExcelExport } from '@/components/ExcelExport';
@@ -31,7 +32,7 @@ import { FinanceExcelExport } from '@/components/ExcelExport';
 interface Transaction {
     id: string;
     order_id: string | null;
-    order_name: string | null;
+    order_name?: string | null;
     date: string;
     type: 'income' | 'expense';
     category: string;
@@ -39,6 +40,13 @@ interface Transaction {
     payment_method: string;
     description: string;
     vendor_name?: string;
+    vendors?: { name: string } | null;
+}
+
+interface Order {
+    id: string;
+    order_number: string;
+    customer_name: string;
 }
 
 // Categories với icons
@@ -63,103 +71,16 @@ const paymentMethods = [
     { id: 'zalopay', name: 'ZaloPay' },
 ];
 
-// Mock Orders for dropdown
-const mockOrders = [
-    { id: 'ORD-20260115-A1X', name: 'Đám cưới - Nguyễn Văn An' },
-    { id: 'ORD-20260114-B2Y', name: 'Thôi nôi - Trần Thị Bích' },
-    { id: 'ORD-20260113-C3Z', name: 'Đám hỏi - Lê Văn Cường' },
-];
-
-// Mock Transactions Data
-const initialTransactions: Transaction[] = [
-    {
-        id: 'TXN-001',
-        order_id: 'ORD-20260115-A1X',
-        order_name: 'Đám cưới - Nguyễn Văn An',
-        date: '2026-01-14',
-        type: 'income',
-        category: 'deposit',
-        amount: 20000000,
-        payment_method: 'transfer',
-        description: 'Khách Nguyễn Văn An đặt cọc đơn hàng đám cưới',
-    },
-    {
-        id: 'TXN-002',
-        order_id: 'ORD-20260115-A1X',
-        order_name: 'Đám cưới - Nguyễn Văn An',
-        date: '2026-01-14',
-        type: 'expense',
-        category: 'equipment',
-        amount: 5000000,
-        payment_method: 'cash',
-        description: 'Đặt thuê bàn ghế cho đơn hàng đám cưới',
-        vendor_name: 'Thuê Đồ Hùng Cường',
-    },
-    {
-        id: 'TXN-003',
-        order_id: 'ORD-20260114-B2Y',
-        order_name: 'Thôi nôi - Trần Thị Bích',
-        date: '2026-01-13',
-        type: 'income',
-        category: 'deposit',
-        amount: 5000000,
-        payment_method: 'momo',
-        description: 'Khách Trần Thị Bích đặt cọc tiệc thôi nôi',
-    },
-    {
-        id: 'TXN-004',
-        order_id: 'ORD-20260115-A1X',
-        order_name: 'Đám cưới - Nguyễn Văn An',
-        date: '2026-01-13',
-        type: 'expense',
-        category: 'ingredient',
-        amount: 8000000,
-        payment_method: 'transfer',
-        description: 'Mua nguyên liệu tươi sống cho đơn hàng đám cưới',
-        vendor_name: 'Chợ Bình Điền',
-    },
-    {
-        id: 'TXN-005',
-        order_id: 'ORD-20260113-C3Z',
-        order_name: 'Đám hỏi - Lê Văn Cường',
-        date: '2026-01-12',
-        type: 'income',
-        category: 'deposit',
-        amount: 10000000,
-        payment_method: 'transfer',
-        description: 'Khách Lê Văn Cường đặt cọc tiệc đám hỏi',
-    },
-    {
-        id: 'TXN-006',
-        order_id: null,
-        order_name: null,
-        date: '2026-01-12',
-        type: 'expense',
-        category: 'labor',
-        amount: 3000000,
-        payment_method: 'cash',
-        description: 'Trả lương đầu bếp phụ tuần 2 tháng 1',
-        vendor_name: 'Anh Minh',
-    },
-    {
-        id: 'TXN-007',
-        order_id: 'ORD-20260114-B2Y',
-        order_name: 'Thôi nôi - Trần Thị Bích',
-        date: '2026-01-11',
-        type: 'expense',
-        category: 'transport',
-        amount: 500000,
-        payment_method: 'cash',
-        description: 'Chi phí vận chuyển nguyên liệu',
-    },
-];
-
 export default function FinancePage() {
-    const [transactions, setTransactions] = useState<Transaction[]>(initialTransactions);
+    const [transactions, setTransactions] = useState<Transaction[]>([]);
+    const [orders, setOrders] = useState<Order[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [typeFilter, setTypeFilter] = useState<'all' | 'income' | 'expense'>('all');
     const [searchTerm, setSearchTerm] = useState('');
     const [showAddModal, setShowAddModal] = useState(false);
     const [dateRange, setDateRange] = useState({ start: '', end: '' });
+    const [submitting, setSubmitting] = useState(false);
 
     // New transaction form
     const [newTransaction, setNewTransaction] = useState<Partial<Transaction>>({
@@ -167,6 +88,45 @@ export default function FinancePage() {
         date: new Date().toISOString().split('T')[0],
         payment_method: 'cash',
     });
+
+    // Fetch transactions from API
+    const fetchTransactions = useCallback(async () => {
+        try {
+            setLoading(true);
+            const response = await fetch('/api/finance');
+            if (!response.ok) throw new Error('Failed to fetch transactions');
+            const data = await response.json();
+            // Map vendor name from join
+            const mapped = data.map((t: Transaction) => ({
+                ...t,
+                vendor_name: t.vendors?.name || t.vendor_name
+            }));
+            setTransactions(mapped);
+            setError(null);
+        } catch (err) {
+            console.error('Error fetching transactions:', err);
+            setError('Không thể tải dữ liệu giao dịch');
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    // Fetch orders for dropdown
+    const fetchOrders = useCallback(async () => {
+        try {
+            const response = await fetch('/api/orders');
+            if (!response.ok) throw new Error('Failed to fetch orders');
+            const data = await response.json();
+            setOrders(data);
+        } catch (err) {
+            console.error('Error fetching orders:', err);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchTransactions();
+        fetchOrders();
+    }, [fetchTransactions, fetchOrders]);
 
     // Calculations
     const filteredTransactions = useMemo(() => {
@@ -194,34 +154,44 @@ export default function FinancePage() {
         return categories.find(c => c.id === categoryId) || { name: categoryId, icon: FileText };
     };
 
-    const handleAddTransaction = () => {
+    const handleAddTransaction = async () => {
         if (!newTransaction.category || !newTransaction.amount || !newTransaction.description) {
             alert('Vui lòng điền đầy đủ thông tin');
             return;
         }
 
-        const order = mockOrders.find(o => o.id === newTransaction.order_id);
+        try {
+            setSubmitting(true);
+            const response = await fetch('/api/finance', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    order_id: newTransaction.order_id || null,
+                    date: newTransaction.date || new Date().toISOString().split('T')[0],
+                    type: newTransaction.type,
+                    category: newTransaction.category,
+                    amount: newTransaction.amount,
+                    payment_method: newTransaction.payment_method || 'cash',
+                    description: newTransaction.description,
+                }),
+            });
 
-        const transaction: Transaction = {
-            id: `TXN-${generateId()}`,
-            order_id: newTransaction.order_id || null,
-            order_name: order?.name || null,
-            date: newTransaction.date || new Date().toISOString().split('T')[0],
-            type: newTransaction.type as 'income' | 'expense',
-            category: newTransaction.category,
-            amount: newTransaction.amount,
-            payment_method: newTransaction.payment_method || 'cash',
-            description: newTransaction.description,
-            vendor_name: newTransaction.vendor_name,
-        };
+            if (!response.ok) throw new Error('Failed to create transaction');
 
-        setTransactions([transaction, ...transactions]);
-        setShowAddModal(false);
-        setNewTransaction({
-            type: 'income',
-            date: new Date().toISOString().split('T')[0],
-            payment_method: 'cash',
-        });
+            // Refresh transactions list
+            await fetchTransactions();
+            setShowAddModal(false);
+            setNewTransaction({
+                type: 'income',
+                date: new Date().toISOString().split('T')[0],
+                payment_method: 'cash',
+            });
+        } catch (err) {
+            console.error('Error creating transaction:', err);
+            alert('Không thể tạo giao dịch. Vui lòng thử lại.');
+        } finally {
+            setSubmitting(false);
+        }
     };
 
     return (
@@ -532,8 +502,8 @@ export default function FinancePage() {
                                             className="input-apple"
                                         >
                                             <option value="">-- Chọn đơn hàng --</option>
-                                            {mockOrders.map(order => (
-                                                <option key={order.id} value={order.id}>{order.name}</option>
+                                            {orders.map(order => (
+                                                <option key={order.id} value={order.id}>{order.order_number} - {order.customer_name}</option>
                                             ))}
                                         </select>
                                         <p className="text-xs text-text-secondary mt-1">

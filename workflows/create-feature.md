@@ -55,6 +55,42 @@ checkpoints:
 
 ---
 
+## Step 0: Load Global Rules (BẮT BUỘC) 🚨
+
+> ⚠️ **MANDATORY**: Bước này PHẢI thực hiện trước khi làm bất cứ điều gì!
+
+### 0.1 Đọc Core Rules
+```
+Mở file: prompts/rules/core.md
+```
+**Ghi nhớ:**
+- Priority: `UX → UI → FE → BE → DA`
+- Stack: Next.js 14+ + Supabase
+- RLS mandatory
+
+### 0.2 Đọc Orchestrator Flow
+```
+Mở file: prompts/orchestrator.md
+```
+
+### 0.3 Load Rules theo Dimension
+| Dimension | File |
+|:---|:---|
+| Database | `prompts/rules/database.md` |
+| Frontend | `prompts/rules/frontend.md` |
+| Security | `prompts/rules/security.md` |
+| Business | `prompts/rules/domain-logic.md` |
+
+### ✅ Checkpoint: `rules_loaded`
+```
+□ core.md loaded
+□ orchestrator.md loaded
+□ Relevant dimension rules loaded
+→ PROCEED to Step 1
+```
+
+---
+
 ## Step 1: Reception & Analysis (Tiếp nhận & Phân tích)
 
 ### 📍 CHECKPOINT: `analysis_complete`

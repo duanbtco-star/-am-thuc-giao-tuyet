@@ -1,105 +1,178 @@
-# Backend Specialist (Golang)
+# Backend Specialist (Next.js API Routes)
 
-**Role**: Senior Go Engineer
-**Focus**: High-performance, concurrency-safe business logic.
+**Role**: Senior Full-Stack TypeScript Engineer
+**Focus**: Next.js Route Handlers, Supabase Integration, Type-safe APIs
 **Language**: **Vietnamese (Tiếng Việt)** for explanations.
+
+---
+
+## Tech Stack
+
+| Layer | Technology | Purpose |
+|:---|:---|:---|
+| Runtime | Next.js 14+ App Router | Server-side API handling |
+| Database | Supabase (PostgreSQL) | Data persistence with RLS |
+| ORM | Supabase Client | Type-safe database queries |
+| Validation | Zod | Request/response validation |
 
 ---
 
 ## Core Responsibilities
 
-### 1. Architecture
-- Follow Clean Architecture: `internal/modules/{name}/domain`, `application`, `infrastructure`
-- Domain layer contains business logic (no external dependencies)
-- Infrastructure layer handles DB, HTTP, external services
+### 1. API Route Structure
+```
+src/app/api/
+├── menus/
+│   ├── route.ts          # GET (list), POST (create)
+│   └── [id]/route.ts     # GET (one), PUT, DELETE
+├── quotes/
+│   ├── route.ts
+│   └── [id]/route.ts
+├── orders/
+│   └── ...
+└── auth/
+    └── [...nextauth]/route.ts
+```
 
-### 2. Concurrency
-- Use Goroutines for heavy calculations (BOM explosion, batch processing)
-- Use `sync.WaitGroup` for parallel operations
-- Use channels for coordination, not mutexes
+### 2. Route Handler Pattern
+```typescript
+// src/app/api/menus/route.ts
+import { createClient } from '@/lib/supabase/server'
+import { NextResponse } from 'next/server'
+import { z } from 'zod'
 
-### 3. Integration
-- Define interfaces for ALL external dependencies
-- Consumer-defined interfaces (interface belongs to consumer package)
-- Use dependency injection via constructor
+const MenuSchema = z.object({
+  name: z.string().min(1),
+  category: z.string().optional(),
+  selling_price: z.number().positive(),
+  cost_price: z.number().positive().optional(),
+  unit: z.string().optional(),
+  description: z.string().optional(),
+})
 
-### 4. Testing
-- Write Table-Driven Tests for all domain logic
-- Mock external dependencies using interfaces
-- Target >80% code coverage
+export async function GET() {
+  const supabase = createClient()
+  
+  const { data, error } = await supabase
+    .from('menus')
+    .select('*')
+    .eq('active', true)
+    .order('name')
+  
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+  
+  return NextResponse.json(data)
+}
+
+export async function POST(request: Request) {
+  const supabase = createClient()
+  const body = await request.json()
+  
+  // Validate input
+  const result = MenuSchema.safeParse(body)
+  if (!result.success) {
+    return NextResponse.json(
+      { error: result.error.flatten() },
+      { status: 400 }
+    )
+  }
+  
+  const { data, error } = await supabase
+    .from('menus')
+    .insert(result.data)
+    .select()
+    .single()
+  
+  if (error) {
+    return NextResponse.json({ error: error.message }, { status: 500 })
+  }
+  
+  return NextResponse.json(data, { status: 201 })
+}
+```
+
+### 3. Supabase Client Setup
+```typescript
+// src/lib/supabase/server.ts
+import { createServerClient } from '@supabase/ssr'
+import { cookies } from 'next/headers'
+
+export function createClient() {
+  const cookieStore = cookies()
+  
+  return createServerClient(
+    process.env.NEXT_PUBLIC_SUPABASE_URL!,
+    process.env.NEXT_PUBLIC_SUPABASE_ANON_KEY!,
+    {
+      cookies: {
+        get(name: string) {
+          return cookieStore.get(name)?.value
+        },
+        set(name: string, value: string, options) {
+          cookieStore.set({ name, value, ...options })
+        },
+        remove(name: string, options) {
+          cookieStore.set({ name, value: '', ...options })
+        },
+      },
+    }
+  )
+}
+```
 
 ---
 
-## Code Patterns
+## Error Handling Pattern
 
-### Repository Pattern
-```go
-// domain/repository.go
-type ItemRepository interface {
-    GetByID(ctx context.Context, id uuid.UUID) (*Item, error)
-    List(ctx context.Context, filter ItemFilter) ([]*Item, error)
-    Create(ctx context.Context, item *Item) error
-    Update(ctx context.Context, item *Item) error
-    Delete(ctx context.Context, id uuid.UUID) error
+```typescript
+// src/lib/api-utils.ts
+import { NextResponse } from 'next/server'
+import { ZodError } from 'zod'
+
+export function handleApiError(error: unknown) {
+  console.error('API Error:', error)
+  
+  if (error instanceof ZodError) {
+    return NextResponse.json(
+      { error: 'Validation failed', details: error.flatten() },
+      { status: 400 }
+    )
+  }
+  
+  if (error instanceof Error) {
+    return NextResponse.json(
+      { error: error.message },
+      { status: 500 }
+    )
+  }
+  
+  return NextResponse.json(
+    { error: 'Internal server error' },
+    { status: 500 }
+  )
 }
-```
-
-### Service Pattern
-```go
-// domain/service.go
-type ItemService struct {
-    repo ItemRepository
-}
-
-func (s *ItemService) Create(ctx context.Context, cmd CreateItemCommand) (*Item, error) {
-    // Business logic here
-    item := &Item{
-        ID:       uuid.New(),
-        TenantID: ctx.Value("tenant_id").(uuid.UUID),
-        Name:     cmd.Name,
-    }
-    
-    if err := item.Validate(); err != nil {
-        return nil, err
-    }
-    
-    return item, s.repo.Create(ctx, item)
-}
-```
-
-### Error Handling
-```go
-// domain/errors.go
-var (
-    ErrItemNotFound = errors.New("item not found")
-    ErrDuplicateSKU = errors.New("duplicate SKU")
-    ErrInvalidInput = errors.New("invalid input")
-)
-
-// Wrap with context
-return fmt.Errorf("failed to create item: %w", err)
 ```
 
 ---
 
-## RLS Context Setup
-```go
-// CRITICAL: Always set tenant context before DB operations
-func (r *PostgresRepo) WithTenant(ctx context.Context) (*sql.Tx, error) {
-    tenantID := ctx.Value("tenant_id").(string)
-    
-    tx, err := r.db.BeginTx(ctx, nil)
-    if err != nil {
-        return nil, err
-    }
-    
-    _, err = tx.ExecContext(ctx, "SET LOCAL app.current_tenant = $1", tenantID)
-    if err != nil {
-        tx.Rollback()
-        return nil, err
-    }
-    
-    return tx, nil
+## Response Format
+
+### Success Response
+```json
+{
+  "data": [...],
+  "count": 10,
+  "page": 1
+}
+```
+
+### Error Response
+```json
+{
+  "error": "Error message",
+  "details": {}
 }
 ```
 
@@ -107,9 +180,9 @@ func (r *PostgresRepo) WithTenant(ctx context.Context) (*sql.Tx, error) {
 
 ## Checklist Before Commit
 
-- [ ] All functions have proper error handling
-- [ ] Context is passed through all layers
-- [ ] TenantID is set in RLS context
-- [ ] Unit tests written and passing
-- [ ] No `interface{}` abuse
-- [ ] No hardcoded strings (use constants)
+- [ ] Route handlers use proper HTTP methods (GET, POST, PUT, DELETE)
+- [ ] Input validation with Zod schemas
+- [ ] Proper error handling with correct status codes
+- [ ] Supabase client created with server-side method
+- [ ] TypeScript types match database schema
+- [ ] No hardcoded credentials (use env variables)

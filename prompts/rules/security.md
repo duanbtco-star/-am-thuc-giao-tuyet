@@ -1,230 +1,171 @@
-# Security Rules (Load for Auth/Permission Work)
+# Security Rules - Ẩm Thực Giáo Tuyết
 
-> **Load when**: Working on authentication, authorization, permissions.
-> Size: ~6KB
-
----
-
-## 1. Authentication
-
-### 1.1 JWT Configuration
-```go
-type JWTConfig struct {
-    Secret          string        // At least 256 bits
-    AccessTokenTTL  time.Duration // 15 minutes
-    RefreshTokenTTL time.Duration // 7 days
-    Issuer          string        // "erp-saas"
-}
-```
-
-### 1.2 JWT Claims
-```go
-type Claims struct {
-    UserID   uuid.UUID `json:"sub"`
-    TenantID uuid.UUID `json:"tid"`
-    Roles    []string  `json:"roles"`
-    jwt.RegisteredClaims
-}
-```
-
-### 1.3 Password Hashing
-```go
-// MUST use Argon2id (NOT bcrypt for new code)
-import "golang.org/x/crypto/argon2"
-
-func HashPassword(password string) (string, error) {
-    salt := make([]byte, 16)
-    rand.Read(salt)
-    
-    hash := argon2.IDKey([]byte(password), salt, 1, 64*1024, 4, 32)
-    
-    return base64.StdEncoding.EncodeToString(append(salt, hash...)), nil
-}
-```
+> **Load when**: Authentication, authorization, data protection.
+> **Stack**: Supabase Auth, Single-tenant
 
 ---
 
-## 2. Authorization: ReBAC
+## 1. Authentication (Supabase Auth)
 
-### 2.1 Relationship-Based Access Control
-```go
-// Check if user can perform action on object
-func (s *PermissionService) Can(
-    ctx context.Context,
-    userID uuid.UUID,
-    action string,
-    objectType string,
-    objectID uuid.UUID,
-) bool {
-    // 1. Check user roles (RBAC)
-    if s.hasRolePermission(ctx, userID, objectType, action) {
-        return true
-    }
-    
-    // 2. Check resource relationship (ReBAC)
-    return s.hasRelationPermission(ctx, userID, objectType, objectID, action)
+### 1.1 Authentication Methods
+- Email + Password (primary)
+- Magic Link (optional)
+- OAuth providers (future: Google, Facebook)
+
+### 1.2 Session Management
+```typescript
+// Server-side: Check session
+import { createClient } from '@/lib/supabase/server'
+
+const supabase = createClient();
+const { data: { user } } = await supabase.auth.getUser();
+
+if (!user) {
+  return NextResponse.json({ error: 'Unauthorized' }, { status: 401 });
 }
 ```
 
-### 2.2 Permission Tables
-```sql
--- User Roles
-CREATE TABLE user_roles (
-    user_id UUID NOT NULL REFERENCES users(id),
-    role TEXT NOT NULL,
-    tenant_id UUID NOT NULL,
-    PRIMARY KEY (user_id, role, tenant_id)
-);
+### 1.3 Protected Routes
+```typescript
+// middleware.ts
+import { createMiddlewareClient } from '@supabase/auth-helpers-nextjs'
 
--- Resource Relations
-CREATE TABLE resource_relations (
-    user_id UUID NOT NULL,
-    object_type TEXT NOT NULL,  -- 'project', 'order'
-    object_id UUID NOT NULL,
-    relation TEXT NOT NULL,     -- 'owner', 'member', 'viewer'
-    tenant_id UUID NOT NULL,
-    PRIMARY KEY (user_id, object_type, object_id)
-);
-```
-
-### 2.3 Relation Permissions
-```go
-var RelationPermissions = map[string][]string{
-    "owner":   {"view", "edit", "delete", "manage"},
-    "manager": {"view", "edit", "manage"},
-    "member":  {"view", "edit_own"},
-    "viewer":  {"view"},
+export async function middleware(req: NextRequest) {
+  const res = NextResponse.next();
+  const supabase = createMiddlewareClient({ req, res });
+  const { data: { session } } = await supabase.auth.getSession();
+  
+  if (!session && req.nextUrl.pathname.startsWith('/dashboard')) {
+    return NextResponse.redirect(new URL('/login', req.url));
+  }
+  
+  return res;
 }
 ```
 
 ---
 
-## 3. Role Hierarchy
+## 2. Authorization (Simple Role-Based)
 
-```
-super_admin
-  └── admin
-        └── manager
-              ├── accountant
-              ├── hr_staff
-              ├── pm
-              └── sales
-                    └── staff
-                          └── viewer
-```
+### 2.1 User Roles
+| Role | Description | Access |
+|:---|:---|:---|
+| `admin` | Quản trị viên | Full access |
+| `staff` | Nhân viên | Create/Read/Update |
+| `viewer` | Xem báo cáo | Read only |
 
-### 3.1 Role Inheritance
-```go
-var RoleHierarchy = map[string][]string{
-    "super_admin": {"admin"},
-    "admin":       {"manager"},
-    "manager":     {"accountant", "hr_staff", "pm", "sales", "staff"},
-    "staff":       {"viewer"},
+### 2.2 Role Check Pattern
+```typescript
+// Simple role check
+const userRole = user?.user_metadata?.role || 'viewer';
+
+if (userRole !== 'admin') {
+  return NextResponse.json({ error: 'Forbidden' }, { status: 403 });
 }
+```
 
-func HasRole(userRoles []string, targetRole string) bool {
-    for _, role := range userRoles {
-        if role == targetRole || inheritsRole(role, targetRole) {
-            return true
-        }
-    }
-    return false
+---
+
+## 3. Data Protection
+
+### 3.1 Input Validation
+```typescript
+// Always validate before processing
+function validateQuote(data: any) {
+  if (!data.customerName || data.customerName.trim() === '') {
+    throw new Error('Tên khách hàng là bắt buộc');
+  }
+  if (!data.phone || !/^[0-9]{10,11}$/.test(data.phone)) {
+    throw new Error('Số điện thoại không hợp lệ');
+  }
+  return true;
 }
+```
+
+### 3.2 XSS Prevention
+```typescript
+// Sanitize user input before display
+import DOMPurify from 'dompurify';
+
+const safeContent = DOMPurify.sanitize(userInput);
+```
+
+### 3.3 SQL Injection Prevention
+```typescript
+// ❌ NEVER - String concatenation
+const query = `SELECT * FROM quotes WHERE id = '${id}'`;
+
+// ✅ ALWAYS - Use Supabase client (parameterized)
+const { data } = await supabase
+  .from('quotes')
+  .select('*')
+  .eq('id', id);
 ```
 
 ---
 
 ## 4. API Security
 
-### 4.1 Rate Limiting (P0)
-```go
-type RateLimiter struct {
-    limiter *rate.Limiter
-}
+### 4.1 Rate Limiting (Optional)
+```typescript
+// Simple rate limit per IP
+const rateLimitMap = new Map();
 
-// Per-tenant limits
-var TenantLimits = map[string]rate.Limit{
-    "free":       rate.Limit(100),   // 100 req/min
-    "starter":    rate.Limit(500),   // 500 req/min
-    "business":   rate.Limit(2000),  // 2000 req/min
-    "enterprise": rate.Limit(10000), // 10000 req/min
-}
-```
-
-### 4.2 Input Validation (P0)
-```go
-// ❌ NEVER - Direct concatenation
-query := "SELECT * FROM orders WHERE id = '" + userInput + "'"
-
-// ✅ ALWAYS - Parameterized queries
-db.Exec("SELECT * FROM orders WHERE id = $1", userInput)
-
-// ✅ ALWAYS - Validate before use
-func (cmd CreateOrderCommand) Validate() error {
-    if cmd.CustomerID == uuid.Nil {
-        return ErrInvalidCustomerID
-    }
-    if cmd.Amount <= 0 {
-        return ErrInvalidAmount
-    }
-    return nil
+function checkRateLimit(ip: string): boolean {
+  const now = Date.now();
+  const windowMs = 60 * 1000; // 1 minute
+  const maxRequests = 100;
+  
+  const requests = rateLimitMap.get(ip) || [];
+  const recentRequests = requests.filter(t => now - t < windowMs);
+  
+  if (recentRequests.length >= maxRequests) {
+    return false;
+  }
+  
+  recentRequests.push(now);
+  rateLimitMap.set(ip, recentRequests);
+  return true;
 }
 ```
 
-### 4.3 XSS Prevention
-```go
-// Escape user content before rendering
-import "html"
-
-safeContent := html.EscapeString(userGeneratedContent)
-```
-
----
-
-## 5. Audit Logging (P0)
-
-```sql
-CREATE TABLE audit_log (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    tenant_id UUID NOT NULL,
-    user_id UUID NOT NULL,
-    action TEXT NOT NULL,      -- 'create', 'update', 'delete'
-    entity_type TEXT NOT NULL, -- 'order', 'item'
-    entity_id UUID NOT NULL,
-    old_value JSONB,
-    new_value JSONB,
-    ip_address TEXT,
-    user_agent TEXT,
-    created_at TIMESTAMP DEFAULT NOW()
-);
-
--- Index for querying
-CREATE INDEX idx_audit_tenant_entity 
-    ON audit_log(tenant_id, entity_type, entity_id);
-```
-
-```go
-// Call after every mutation
-func (s *OrderService) UpdateOrder(ctx context.Context, order *Order) error {
-    oldOrder, _ := s.repo.GetByID(ctx, order.ID)
-    err := s.repo.Update(ctx, order)
-    if err == nil {
-        s.audit.Log(ctx, "update", "order", order.ID, oldOrder, order)
-    }
-    return err
+### 4.2 Error Handling
+```typescript
+// Never expose internal errors
+try {
+  // operation
+} catch (error) {
+  console.error('Internal error:', error);
+  return NextResponse.json(
+    { error: 'Có lỗi xảy ra, vui lòng thử lại' },
+    { status: 500 }
+  );
 }
 ```
 
 ---
 
-## 6. Permission Matrix Reference
+## 5. Environment Variables
 
-> For detailed permission definitions, see `.agent/permission-matrix.md`
+### 5.1 Required Variables
+```env
+NEXT_PUBLIC_SUPABASE_URL=https://xxx.supabase.co
+NEXT_PUBLIC_SUPABASE_ANON_KEY=eyJxxxx
+SUPABASE_SERVICE_ROLE_KEY=eyJxxxx (server only)
+```
 
-### Quick Reference
-| Module | Hidden From |
-| :--- | :--- |
-| Finance | technician, engineer, warehouse |
-| HR | technician, engineer, pm, sales |
-| Settings | All except admin |
-| Dashboard | None (all can access) |
+### 5.2 Security Rules
+- **NEVER** commit `.env.local` to git
+- **NEVER** expose `SERVICE_ROLE_KEY` to client
+- Use `NEXT_PUBLIC_` prefix only for public keys
+
+---
+
+## 6. Checklist Security Review
+
+Before deploying any feature:
+- [ ] Input validation implemented
+- [ ] Error messages don't expose internals
+- [ ] Supabase client used (no raw SQL)
+- [ ] Sensitive data logged appropriately
+- [ ] Environment variables secured

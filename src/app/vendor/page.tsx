@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useState, useEffect, useCallback } from 'react';
 import { motion, AnimatePresence } from 'framer-motion';
 import Link from 'next/link';
 import {
@@ -122,11 +122,55 @@ const mockVendors: Vendor[] = [
 ];
 
 export default function VendorPage() {
-    const [vendors, setVendors] = useState(mockVendors);
+    const [vendors, setVendors] = useState<Vendor[]>([]);
+    const [loading, setLoading] = useState(true);
+    const [error, setError] = useState<string | null>(null);
     const [searchTerm, setSearchTerm] = useState('');
     const [categoryFilter, setCategoryFilter] = useState<string | null>(null);
     const [selectedVendor, setSelectedVendor] = useState<Vendor | null>(null);
     const [showAddModal, setShowAddModal] = useState(false);
+
+    // Fetch vendors from Supabase API
+    const fetchVendors = useCallback(async () => {
+        try {
+            setLoading(true);
+            const response = await fetch('/api/vendors');
+            if (!response.ok) throw new Error('Failed to fetch vendors');
+            const data = await response.json();
+
+            if (Array.isArray(data) && data.length > 0) {
+                const mapped: Vendor[] = data.map((v: Record<string, unknown>) => ({
+                    id: v.id as string,
+                    name: v.name as string || '',
+                    category: v.category as string || '',
+                    phone: v.phone as string || '',
+                    address: v.address as string || '',
+                    specialties: v.specialties as string || '',
+                    rating: Number(v.rating) || 0,
+                    price_range: v.price_range as string || '',
+                    active: v.active !== false,
+                    notes: v.notes as string || '',
+                }));
+                setVendors(mapped);
+                setError(null);
+            } else {
+                // Use mock data if no vendors in database
+                console.info('No vendors from API, using mock data');
+                setVendors(mockVendors);
+                setError('Đang hiển thị dữ liệu mẫu');
+            }
+        } catch (err) {
+            console.error('Error fetching vendors:', err);
+            setVendors(mockVendors);
+            setError('Không thể kết nối API. Đang hiển thị dữ liệu mẫu.');
+        } finally {
+            setLoading(false);
+        }
+    }, []);
+
+    useEffect(() => {
+        fetchVendors();
+    }, [fetchVendors]);
 
     const filteredVendors = vendors.filter(vendor => {
         const matchesSearch = vendor.name.toLowerCase().includes(searchTerm.toLowerCase()) ||

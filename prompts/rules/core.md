@@ -1,7 +1,7 @@
-# Core Rules (Always Load)
+# Core Rules - Ẩm Thực Giáo Tuyết
 
-> **Essential rules that MUST be loaded for every task.**
-> Size: ~5KB (optimized for minimal token usage)
+> **Essential rules PHẢI load cho mọi task.**
+> Dự án: **Single-tenant Catering Management System**
 
 ---
 
@@ -9,75 +9,104 @@
 
 ### Article 1: Absolute Priority Order
 **`UX → UI → FE → BE → DA`**
-- **Philosophy**: We build for the User, not the Database.
-- All technical decisions must satisfy the layer above it first.
-- **Exception**: Only reverse for "Force Majeure" technical conflicts (Security vulnerabilities, Physical impossibilities).
+- **Philosophy**: Xây dựng cho Người dùng, không phải cho Database.
+- Mọi quyết định kỹ thuật phải ưu tiên layer phía trên.
 
 ### Article 2: Mandatory 5-Dimensional Assessment
-Every major feature request MUST be assessed across:
-1. **UX** (User Experience): Flow, Ease of use.
-2. **UI** (User Interface): Visuals, Density, Alignment.
-3. **FE** (Frontend): Interaction, State Management, Performance.
-4. **BE** (Backend): Logic, Security, API Design.
-5. **DA** (Data Architecture): Schema, Integrity, Scalability.
-
-### Article 3: Council Mechanism
-- **Trigger**: If 2+ dimensions have High/Equal Impact → Stop and Simulate Multi-Agent Discussion.
+Mọi feature request PHẢI đánh giá:
+1. **UX** (User Experience): Flow, Dễ sử dụng
+2. **UI** (User Interface): Giao diện, Layout
+3. **FE** (Frontend): Interaction, State Management
+4. **BE** (Backend): Logic, API Design
+5. **DA** (Data Architecture): Schema, Integrity
 
 ---
 
 ## 1. Architecture & Tech Stack
 
 | Component | Technology | Version |
-| :--- | :--- | :--- |
-| **Pattern** | Modular Monolith | - |
-| **Backend** | Go (Golang) | 1.22+ |
-| **Database** | PostgreSQL | 16+ |
-| **Frontend** | Next.js | 14+ (App Router) |
-| **UI Grid** | AG Grid Enterprise | Required |
+|:---|:---|:---|
+| **Pattern** | Single-tenant Monolith | - |
+| **Frontend** | Next.js (App Router) | 14+ |
+| **Backend** | Next.js Route Handlers | `/api/*` |
+| **Database** | Supabase (PostgreSQL) | - |
+| **Auth** | Supabase Auth | Email/OAuth |
+| **Hosting** | Vercel | Production |
 
 ---
 
-## 2. Multi-Tenancy (Non-Negotiable)
+## 2. Security Model (Single-Tenant)
 
-- **Row-Level Security (RLS)** is the primary defense.
-- **EVERY table** (except global configs) MUST have `tenant_id` column.
-- App Context MUST set `app.current_tenant` at start of every transaction.
-- **NEVER** bypass RLS except for super-admin migrations.
+> ⚠️ **Lưu ý**: Dự án này là **single-tenant**, không cần multi-tenancy.
+
+### 2.1 Row-Level Security (RLS)
+- RLS vẫn được **bật** để bảo vệ data
+- Sử dụng policy đơn giản: `USING (true)` cho authenticated users
+- Không cần `tenant_id` column
+
+### 2.2 Authentication
+- Supabase Auth quản lý users
+- Session-based authentication
+- Protected routes via middleware
 
 ---
 
-## 3. Module Boundaries
+## 3. Module Structure
 
-| Module | Owns Tables | Exposes |
-| :--- | :--- | :--- |
-| **Inventory** | items, lots, warehouses | ItemService interface |
-| **Sales** | orders, quotes, customers | OrderService interface |
-| **Projects** | projects, wbs, tasks | ProjectService interface |
-| **Finance** | journals, accounts | JournalService interface |
-
-**Rule**: Modules MUST NOT query each other's tables directly. Use service interfaces.
+| Module | Tables | Endpoint |
+|:---|:---|:---|
+| **Menu** | `menus` | `/api/menus` |
+| **Quotes** | `quotes` | `/api/quotes` |
+| **Orders** | `orders` | `/api/orders` |
+| **Calendar** | `calendar_events` | `/api/calendar` |
+| **Vendors** | `vendors` | `/api/vendors` |
+| **Finance** | `transactions` | `/api/finance` |
 
 ---
 
 ## 4. Communication Standards
 
-- **Language**: Vietnamese (Tiếng Việt) for all explanations and documentation.
-- **Code Comments**: English (for international compatibility).
-- **i18n**: Default Vietnamese, English as secondary.
+- **Language**: Vietnamese (Tiếng Việt) cho tất cả explanations và docs
+- **Code Comments**: English (cho compatibility)
+- **UI Text**: Vietnamese (default)
 
 ---
 
 ## 5. Definition of Done (DoD)
 
-Every feature is complete when:
+Mọi feature hoàn thành khi:
 - [ ] 5-Dimensional Assessment documented
-- [ ] Unit tests with >70% coverage
-- [ ] Integration test for happy path
-- [ ] RLS compliance verified
-- [ ] Permission Matrix defined
-- [ ] User Guide (Vietnamese) created
+- [ ] **Authorization Review passed** (xem Section 6)
+- [ ] Code hoạt động đúng chức năng
 - [ ] Browser test passed
+- [ ] User Guide (Vietnamese) created
+- [ ] Không có console/network errors
+
+---
+
+## 6. Authorization Review (MANDATORY)
+
+> ⚠️ **BẮT BUỘC**: Mọi feature PHẢI kiểm tra phân quyền trước khi hoàn thành.
+
+### 6.1 Checklist Phân Quyền
+Trước khi đánh dấu feature "Done", PHẢI trả lời:
+
+| # | Câu hỏi | Yêu cầu |
+|:---|:---|:---|
+| 1 | **Module Access** | Roles nào có thể XEM feature này? |
+| 2 | **CRUD Permissions** | Roles nào có thể Create/Read/Update/Delete? |
+| 3 | **Frontend Guard** | UI có ẩn elements không được phép? |
+| 4 | **Backend Guard** | API có trả 403 cho requests không được phép? |
+
+### 6.2 Role Matrix (Tham khảo)
+| Role | Quyền mặc định |
+|:---|:---|
+| `admin` | Full access - tất cả tính năng |
+| `staff` | Create, Read, Update - không Delete |
+| `viewer` | Read only - chỉ xem |
+
+### 6.3 Specialist Reference
+Đọc chi tiết pattern tại: `prompts/specialists/security.md`
 
 ---
 
@@ -85,7 +114,7 @@ Every feature is complete when:
 
 ### Load Additional Rules (As Needed)
 | Need | File |
-| :--- | :--- |
+|:---|:---|
 | Database/SQL work | `prompts/rules/database.md` |
 | Frontend/React work | `prompts/rules/frontend.md` |
 | Security/Auth work | `prompts/rules/security.md` |
@@ -93,8 +122,7 @@ Every feature is complete when:
 
 ### Key Documents
 | Document | Path |
-| :--- | :--- |
-| Permission Matrix | `.agent/permission-matrix.md` |
-| API Contracts | `.agent/api-contracts.md` |
-| Database Schema | `.agent/database-schema.md` |
-| Roadmap | `.agent/ROADMAP.md` |
+|:---|:---|
+| API Documentation | `API_DOCUMENTATION.md` |
+| User Manual | `USER_MANUAL.md` |
+| Roadmap | `ROADMAP.md` |

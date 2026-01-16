@@ -132,36 +132,51 @@ export default function OrdersPage() {
     const [refreshing, setRefreshing] = useState(false);
     const { addToast } = useToast();
 
-    // Fetch orders from API
+    // Fetch orders from Supabase API
     const fetchOrders = useCallback(async (showRefreshToast = false) => {
         try {
             if (showRefreshToast) setRefreshing(true);
             else setLoading(true);
             setError(null);
 
-            const response = await orderApi.getAll();
+            const response = await fetch('/api/orders');
 
-            if (response.success && response.data) {
-                // Ensure data is always an array
-                const ordersData = Array.isArray(response.data) ? response.data : [];
-                // Use mock data if API returns empty array (backend not configured yet)
-                if (ordersData.length === 0) {
-                    console.info('No orders from API, using mock data for demo');
-                    setOrders(mockOrders);
-                    setError('Đang hiển thị dữ liệu mẫu (API chưa có dữ liệu)');
-                } else {
-                    setOrders(ordersData);
-                }
+            if (!response.ok) {
+                throw new Error('Failed to fetch orders');
+            }
+
+            const data = await response.json();
+
+            if (Array.isArray(data) && data.length > 0) {
+                // Map API response to Order format
+                const mappedOrders: Order[] = data.map((o: Record<string, unknown>) => ({
+                    order_id: String(o.order_number || o.id || ''),
+                    quote_id: String(o.quote_id || ''),
+                    customer_name: String(o.customer_name || ''),
+                    phone: String(o.phone || ''),
+                    event_type: String(o.event_type || ''),
+                    event_date: String(o.event_date || ''),
+                    event_time: String(o.event_time || ''),
+                    location: String(o.location || ''),
+                    guest_count: Number(o.guest_count) || 0,
+                    menu_items: Array.isArray(o.menu_items) ? o.menu_items : [],
+                    total_amount: Number(o.total_amount) || 0,
+                    deposit: Number(o.deposit) || 0,
+                    remaining: Number(o.remaining) || 0,
+                    status: (o.status as 'confirmed' | 'preparing' | 'in_progress' | 'completed' | 'cancelled') || 'confirmed',
+                    assigned_vendors: Array.isArray(o.assigned_vendors) ? o.assigned_vendors : [],
+                    created_at: String(o.created_at || ''),
+                    notes: String(o.notes || ''),
+                }));
+                setOrders(mappedOrders);
                 if (showRefreshToast) {
                     addToast('success', 'Đã cập nhật danh sách đơn hàng');
                 }
             } else {
-                // Use mock data if API fails
-                console.warn('API failed, using mock data');
+                // Use mock data if no orders in database
+                console.info('No orders from API, using mock data for demo');
                 setOrders(mockOrders);
-                if (showRefreshToast) {
-                    addToast('warning', 'Đang sử dụng dữ liệu mẫu');
-                }
+                setError('Đang hiển thị dữ liệu mẫu (Chưa có đơn hàng trong database)');
             }
         } catch (err) {
             console.error('Error fetching orders:', err);

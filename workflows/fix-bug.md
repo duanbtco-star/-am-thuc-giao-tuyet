@@ -11,6 +11,30 @@ description: Quy trình sửa lỗi (bug) một cách có hệ thống
 
 ---
 
+## Step 0: Load Global Rules (BẮT BUỘC) 🚨
+
+> ⚠️ **MANDATORY**: Đọc rules trước khi fix bug!
+
+### 0.1 Đọc Core Rules
+```
+prompts/rules/core.md
+prompts/orchestrator.md
+```
+
+### 0.2 Load Specialist phù hợp
+Tùy bug ở layer nào:
+```
+prompts/specialists/frontend.md    # UI bugs
+prompts/specialists/backend.md     # API bugs
+prompts/specialists/database.md    # Data bugs
+prompts/specialists/auto-correction.md  # General debugging
+```
+
+### ✅ Checkpoint: `rules_loaded`
+→ PROCEED to Step 1
+
+---
+
 ## Step 1: Bug Analysis (Phân tích lỗi)
 
 ### 1.1 Thu thập thông tin
